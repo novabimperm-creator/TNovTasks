@@ -1,0 +1,56 @@
+﻿<Window x:Class="TNovTasks.TaskListWPF"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:TNovTasks"
+             mc:Ignorable="d" Width="650"
+            WindowStartupLocation="CenterScreen" 
+            Background="White" BorderBrush="#FF008E43" BorderThickness="1"
+            ResizeMode="NoResize" WindowStyle="None">
+    
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="30"
+              ResizeBorderThickness="5"
+              GlassFrameThickness="0"
+              CornerRadius="0"/>
+    </WindowChrome.WindowChrome>
+    <Grid>
+        <!-- Верхняя панель (кастомный заголовок) -->
+        <Border Height="30" 
+                Background="#FF008E43" 
+                VerticalAlignment="Top"
+                MouseDown="Border_MouseDown">
+            <TextBlock Text="TNov - Задания" 
+                       Foreground="White"
+                       VerticalAlignment="Center"
+                       Margin="10,0"/>
+        </Border>
+
+        <!-- Основное содержимое -->
+        <Border Margin="0,30,0,0">
+            <StackPanel VerticalAlignment="Center" >
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <TextBlock  Text="Проверьте статусы заданий и выберите действие:" Margin="5"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" >
+
+                    <ScrollViewer Name="scroll" Height="550">
+                        <StackPanel Orientation="Vertical" Name="sp0">
+
+                        </StackPanel>
+                    </ScrollViewer>
+
+
+                </StackPanel>
+
+
+            </StackPanel>
+
+
+        </Border>
+    </Grid>
+
+    
+</Window>
