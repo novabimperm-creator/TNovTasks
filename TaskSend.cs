@@ -151,6 +151,13 @@ namespace TNovTasks
                 return Result.Cancelled;
             }
 
+
+            foreach (var item in itemsForComments) //добавлено 05.2026 - заполнение истории выдачи
+            {
+                item.AppendVersionComment(item.NewComment);
+                item.NewComment = null;   // очищаем временное поле
+            }
+
             string updatedJson = JsonConvert.SerializeObject(existingItems, Formatting.Indented);
 
             foreach (var item in itemsForComments) 

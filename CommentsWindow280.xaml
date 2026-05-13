@@ -78,7 +78,7 @@ Margin="10,0"/>
                                             IsReadOnly="True" 
                                             Width="*"/>
                         <DataGridTextColumn Header="Комментарии" 
-                                            Binding="{Binding MEPComments, UpdateSourceTrigger=PropertyChanged}" 
+                                            Binding="{Binding NewComment, UpdateSourceTrigger=PropertyChanged}" 
                                             Width="2*"/>
                     </DataGrid.Columns>
                 </DataGrid>

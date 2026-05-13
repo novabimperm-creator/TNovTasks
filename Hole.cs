@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -42,6 +43,27 @@ namespace TNovTasks
         public string STCheckDate { get; set; }
         public string STMisc { get; set; }
         public string MEPComments { get; set; }
+        public string MEPCommentsHistory { get; set; }
+        [JsonIgnore]
+        public string NewComment { get; set; }
+
+        /// <summary>
+        /// Добавляет запись о комментарии для следующей версии (текущая TaskVersion + 1).
+        /// </summary>
+        public void AppendVersionComment(string comment)
+        {
+            if (string.IsNullOrWhiteSpace(comment))
+                return;
+
+            MEPComments = comment;
+
+            string entry = $"{TaskVersion}: {comment}";
+
+            if (string.IsNullOrEmpty(MEPCommentsHistory))
+                MEPCommentsHistory = entry;
+            else
+                MEPCommentsHistory += Environment.NewLine + entry;
+        }
     }
     public class HoleGroup : INotifyPropertyChanged
     {
