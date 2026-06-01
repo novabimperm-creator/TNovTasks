@@ -41,12 +41,7 @@ namespace TNovTasks
 
             if (taskModel) 
             {
-                //проверка подключения к серверу
-                string usagefilePath = nova.novaserver + "_TNov/usage.txt";
-                bool servercheck = File.Exists(usagefilePath);
-
-                if (servercheck)
-                {
+                
                     List<ElementId> idsA = data.GetAddedElementIds().ToList();
                     List<ElementId> idsM = data.GetModifiedElementIds().ToList();
                     List<ElementId> ids = new List<ElementId>();
@@ -108,7 +103,7 @@ namespace TNovTasks
 
                     }
                     
-                }
+                
             }
 
             

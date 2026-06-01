@@ -19,19 +19,25 @@ namespace TNovTasks
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            string TNovClassName = "Задание Отправить"; DateTime dateTime = DateTime.Now; string TNovVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            
+            #region Исходные
+            DateTime dateTime = DateTime.Now;
+            string TNovVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            string DBCommandName = "Задание Отправить";
             //подключение приложения и документа
             if (RevitAPI.UiApplication == null) { RevitAPI.Initialize(commandData); }
-            UIDocument uidoc = RevitAPI.UiDocument; Autodesk.Revit.DB.Document doc = RevitAPI.Document;
+            UIDocument uidoc = RevitAPI.UiDocument; Document doc = RevitAPI.Document;
             UIApplication uiApp = RevitAPI.UiApplication; Autodesk.Revit.ApplicationServices.Application rvtApp = uiApp.Application;
+            string docName = doc.Title.ToString(); docName = docName.Replace(",", " ");
+            string userName = rvtApp.Username; userName = userName.Replace(",", "");
+            string docNameUserName = "_" + userName; docName = docName.Replace(docNameUserName, "");
+            docName = docName.Replace(",", "");
+            #endregion
 
-            //ЗАГЛУШКА
-            /*
-            new InfoWindow280("Функционал находится в стадии разработки. Спасибо за ваш интерес!").ShowDialog();
-            return Result.Succeeded;
-            */
+            TNovConfig config = TNovConfigLoad.LoadConfig(DBCommandName, TNovVersion);
 
-            string docName = doc.Title.ToString();
+            
+
             if (docName.Contains("Задани") || docName.Contains("задани") || docName.Contains("-ЗД") || docName.Contains("_ЗД") || docName.Contains("ЗАДАНИЕ")) { }
             else
             {
@@ -39,13 +45,29 @@ namespace TNovTasks
                 return Result.Cancelled;
             }
 
-
-            //проверка подключения, запись в журнал
-            if (ServerUtils.CheckConnection(TNovClassName, TNovVersion) == false) return Result.Failed;
-
+            #region Настройки логов
             // создание log - файла
-            Logger.Initialize(TNovClassName, dateTime, TNovVersion);
+            Logger.Initialize(DBCommandName, dateTime, TNovVersion);
 
+            var viewModel0 = new AppVersionViewModel();
+
+            string jsonpath0 = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "TNovClient/TNovSettings.json");
+            viewModel0 = JsonConvert.DeserializeObject<AppVersionViewModel>(File.ReadAllText(jsonpath0));
+            if (viewModel0.extendedLogs)
+
+            {
+                var qViewModel = new QuestionWindowViewModel();
+                qViewModel.headtxt = "Включены расширенные логи. " +
+                    "Плагин будет работать медленнее, но соберет больше данных. " +
+                    "Выключить расширенные логи для ускорения работы?";
+                var qwpfview = new QuestionWindow280(qViewModel);
+                qViewModel.CloseRequest += (s, e) => qwpfview.Close();
+                bool? qok = qwpfview.ShowDialog();
+                if (qok != null && qok == true) { Logger.TurnOffExtendedLogs(); } else Logger.Log("Расширенные логи вкл", 2);
+            }
+            #endregion
+
+            #region Выборка
             //запускаем для уже выбранных групп
             Logger.Log("Анализ текущей выборки", 1);
             Autodesk.Revit.UI.Selection.Selection selection = commandData.Application.ActiveUIDocument.Selection;
@@ -59,13 +81,12 @@ namespace TNovTasks
             }
 
             if (groupsList.Count < 1) { Logger.Log("Отсутствуют группы в выборке. Завершение работы", 3); return Result.Cancelled; }
+            #endregion
 
-            
 
             //имя и роль пользователя
-            string userName = rvtApp.Username;
             string userDepartment = "-";
-            string[] rolesFile = File.ReadAllLines("//fs-nova/Distr/0.For Admin/_TNov/roles.txt");
+            string[] rolesFile = File.ReadAllLines(config.ServerPath+"roles.txt");
             foreach (string role in rolesFile)
             {
                 if (role.Contains(userName))
@@ -74,14 +95,14 @@ namespace TNovTasks
                 }
             }
 
-            docName = docName.Replace(",", " "); string docNameUserName = "_" + userName; docName = docName.Replace(docNameUserName, "");
+            #region Десериализация
 
             List<string> names = new List<string>();
             names.Add(docName);
 
             List<HoleGroupBaseItem> existingItems = new List<HoleGroupBaseItem>();
             // Десериализация
-            string jsonFilePath = nova.novaserver + "_TNov/tasks/" + docName + ".json";
+            string jsonFilePath = config.ServerPath + "tasks/" + docName + ".json";
             if (File.Exists(jsonFilePath))
             {
                 string jsonContent = File.ReadAllText(jsonFilePath);
@@ -89,7 +110,9 @@ namespace TNovTasks
                                 ?? new List<HoleGroupBaseItem>();
             }
             string currentDateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                        
+            #endregion
+
+            #region Сбор данных
             foreach (Group group in groupsList)
             {
                 string groupName = group.Name;
@@ -142,7 +165,9 @@ namespace TNovTasks
                 if (item != null)
                     itemsForComments.Add(item);
             }
+            #endregion
 
+            #region Диалог (ввод комментариев)
             var commentsWindow = new CommentsWindow280(itemsForComments);
             bool? result = commentsWindow.ShowDialog();
             if (result != true)
@@ -150,7 +175,7 @@ namespace TNovTasks
                 Logger.Log("Отменено. Завершение работы", 3);
                 return Result.Cancelled;
             }
-
+            #endregion
 
             foreach (var item in itemsForComments) //добавлено 05.2026 - заполнение истории выдачи
             {

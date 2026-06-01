@@ -19,26 +19,26 @@ namespace TNovTasks
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            string TNovClassName = "Задание Автомаркировка"; DateTime dateTime = DateTime.Now; string TNovVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            
+            #region Исходные
+            DateTime dateTime = DateTime.Now;
+            string TNovVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            string DBCommandName = "Задание Автомаркировка";
             //подключение приложения и документа
             if (RevitAPI.UiApplication == null) { RevitAPI.Initialize(commandData); }
-            UIDocument uidoc = RevitAPI.UiDocument; Autodesk.Revit.DB.Document doc = RevitAPI.Document;
+            UIDocument uidoc = RevitAPI.UiDocument; Document doc = RevitAPI.Document;
             UIApplication uiApp = RevitAPI.UiApplication; Autodesk.Revit.ApplicationServices.Application rvtApp = uiApp.Application;
-                        
-            string docName = doc.Title.ToString();
-            if (docName.Contains("Задани") || docName.Contains("задани") || docName.Contains("-ЗД") || docName.Contains("_ЗД") || docName.Contains("ЗАДАНИЕ")) { }
-            else
-            {
-                new InfoWindow280("Данный функционал доступен только в модели Заданий!").ShowDialog();
-                return Result.Cancelled;
-            }
+            string docName = doc.Title.ToString(); docName = docName.Replace(",", " ");
+            string userName = rvtApp.Username; userName = userName.Replace(",", "");
+            string docNameUserName = "_" + userName; docName = docName.Replace(docNameUserName, "");
+            docName = docName.Replace(",", "");
+            #endregion
 
+            TNovConfig config = TNovConfigLoad.LoadConfig(DBCommandName, TNovVersion);
 
-            //проверка подключения, запись в журнал
-            if (ServerUtils.CheckConnection(TNovClassName, TNovVersion) == false) return Result.Failed;
-
+            #region Настройки логов
             // создание log - файла
-            Logger.Initialize(TNovClassName, dateTime, TNovVersion);
+            Logger.Initialize(DBCommandName, dateTime, TNovVersion);
 
             var viewModel0 = new AppVersionViewModel();
 
@@ -56,10 +56,12 @@ namespace TNovTasks
                 bool? qok = qwpfview.ShowDialog();
                 if (qok != null && qok == true) { Logger.TurnOffExtendedLogs(); } else Logger.Log("Расширенные логи вкл", 2);
             }
+            #endregion
+
 
             int holeMaxNum = TaskTools.GetHoleMaxNumber(doc);
 
-            //диалог
+            #region Диалог
             var qViewModel1 = new QuestionWindowViewModel();
             qViewModel1.headtxt = "Последний взятый номер отверстия: " + holeMaxNum +
                 ". Выберем группу, заполним недостающие номера?";
@@ -72,7 +74,9 @@ namespace TNovTasks
                 Logger.Log("Отменено. Завершение работы", 3); return Result.Cancelled;
             }
             //new InfoWindow280("Последний взятый номер отверстия: "+holeMaxNum).ShowDialog();
+            #endregion
 
+            #region Выборка
             //выбираем группу (либо запускаем для уже выбранной)
             Logger.Log("Анализ текущей выборки", 1);
             Autodesk.Revit.UI.Selection.Selection selection = commandData.Application.ActiveUIDocument.Selection;
@@ -95,13 +99,13 @@ namespace TNovTasks
             }
 
             if (groupsList.Count < 1) { Logger.Log("Отсутствуют группы в выборке. Завершение работы", 3); return Result.Cancelled; }
+            #endregion
 
             if (holeMaxNum == 0) Logger.Log("Номера еще не заполнялись, начнем с 1", 1);
 
             //имя и роль пользователя
-            string userName = rvtApp.Username;
             string userDepartment = "-";
-            string[] rolesFile = File.ReadAllLines("//fs-nova/Distr/0.For Admin/_TNov/roles.txt");
+            string[] rolesFile = File.ReadAllLines(config.ServerPath+"roles.txt");
             foreach (string role in rolesFile)
             {
                 if (role.Contains(userName))
@@ -112,6 +116,7 @@ namespace TNovTasks
 
             List<string> newNums = new List<string>();
 
+            #region Основной код
             using (Transaction t1 = new Transaction(doc))
             {
                 t1.Start("Задания от ИОС. Нумерация отверстий");
@@ -186,8 +191,8 @@ namespace TNovTasks
                 t1.Commit();
                 Logger.Log("Нумерация завершена", 1);
             }
+            #endregion
 
-            
             Logger.Log("Завершение работы.", 5);
 
             return Result.Succeeded;

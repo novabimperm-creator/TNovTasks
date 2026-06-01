@@ -57,16 +57,11 @@ namespace TNovTasks
                 return Result.Succeeded;
             }
 
-            #region Журнал
-            string TNovClassName = DBCommandName;
+            TNovConfig config = TNovConfigLoad.LoadConfig(DBCommandName, TNovVersion);
 
-            //проверка подключения, запись в журнал
-            if (ServerUtils.CheckConnection(TNovClassName, TNovVersion)==false) return Result.Failed;
-
-            #endregion
             #region Настройки логов
             // создание log - файла
-            Logger.Initialize(TNovClassName,dateTime,TNovVersion);
+            Logger.Initialize(DBCommandName,dateTime,TNovVersion);
 
             var viewModel0 = new AppVersionViewModel();
             

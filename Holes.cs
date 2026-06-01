@@ -51,24 +51,33 @@ namespace TNovTasks
         }
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            string TNovClassName = "Отверстия"; DateTime dateTime = DateTime.Now; string TNovVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+
+            #region Исходные
+            DateTime dateTime = DateTime.Now;
+            string TNovVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            string DBCommandName = "Отверстия";
             //подключение приложения и документа
             if (RevitAPI.UiApplication == null) { RevitAPI.Initialize(commandData); }
             UIDocument uidoc = RevitAPI.UiDocument; Document doc = RevitAPI.Document;
             UIApplication uiApp = RevitAPI.UiApplication; Autodesk.Revit.ApplicationServices.Application rvtApp = uiApp.Application;
-            
-            //проверка подключения, запись в журнал
-            if(ServerUtils.CheckConnection(TNovClassName, TNovVersion)==false) return Result.Failed;
+            string docName = doc.Title.ToString(); docName = docName.Replace(",", " ");
+            string userName = rvtApp.Username; userName = userName.Replace(",", "");
+            string docNameUserName = "_" + userName; docName = docName.Replace(docNameUserName, "");
+            docName = docName.Replace(",", "");
+            #endregion
 
+            TNovConfig config = TNovConfigLoad.LoadConfig(DBCommandName, TNovVersion);
+
+            #region Настройки логов
             // создание log - файла
-            Logger.Initialize(TNovClassName,dateTime,TNovVersion);
+            Logger.Initialize(DBCommandName, dateTime, TNovVersion);
 
             var viewModel0 = new AppVersionViewModel();
-            
-            string jsonpath0 = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "TNovClient/TNovSettings.json"); 
+
+            string jsonpath0 = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "TNovClient/TNovSettings.json");
             viewModel0 = JsonConvert.DeserializeObject<AppVersionViewModel>(File.ReadAllText(jsonpath0));
             if (viewModel0.extendedLogs)
-            
+
             {
                 var qViewModel = new QuestionWindowViewModel();
                 qViewModel.headtxt = "Включены расширенные логи. " +
@@ -77,17 +86,18 @@ namespace TNovTasks
                 var qwpfview = new QuestionWindow280(qViewModel);
                 qViewModel.CloseRequest += (s, e) => qwpfview.Close();
                 bool? qok = qwpfview.ShowDialog();
-                if (qok != null && qok == true) { Logger.TurnOffExtendedLogs(); } else Logger.Log("Расширенные логи вкл",2);
+                if (qok != null && qok == true) { Logger.TurnOffExtendedLogs(); } else Logger.Log("Расширенные логи вкл", 2);
             }
+            #endregion
 
-            
+
+
             //сценарий работы
             int scenario = 1; //1 - работа в модели КЖ/АР, 2 - работа в самой модели заданий
 
-            string docName = doc.Title.ToString();
             if (docName.Contains("Задани") || docName.Contains("задани") || docName.Contains("-ЗД") || docName.Contains("_ЗД") || docName.Contains("ЗАДАНИЕ")) scenario = 2;
 
-
+            #region Параметры
             //параметры
             Guid adskElev0paramGuid = new Guid("6ec2f9e9-3d50-4d75-a453-26ef4e6d1625");//ADSK_Отверстие_Отметка от нуля
             Guid adskElevLevelparamGuid = new Guid("e4793a44-6050-45b3-843e-cfb49d9191c5");//ADSK_Отверстие_Отметка от этажа
@@ -101,7 +111,9 @@ namespace TNovTasks
             ElementId id2 = new ElementId(-2000011); catIds.Add(id2); //стены
             //ElementId id3 = new ElementId(-2001320); catIds.Add(id3); //каркас несущий
             ElementId id4 = new ElementId(-2001300); catIds.Add(id4); //фунд
+            #endregion
 
+            #region Сбор элементов
             Logger.Log("Сбор элементов",1);
 
             List<Wall> walls = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Walls)   //фильтр по категории Стены
@@ -185,9 +197,11 @@ namespace TNovTasks
                 Logger.Log("Отверстия отсутствуют. Завершение работы.", 3);
                 return Result.Cancelled; 
             }
+            #endregion
 
             ElementId workviewid = uidoc.ActiveView.Id;
 
+            #region Группы
             //ищем группы, вставленные в модели больше одного раза
 
             Logger.Log("Ищем группы, вставленные более 1 раза",1);
@@ -241,15 +255,15 @@ namespace TNovTasks
                 }
                 
             }
+            #endregion
 
-
-
+            #region Диалог
             Logger.Log("Диалоговое окно",1);
             //Диалог
             var viewModel = new HolesViewModel();
             // Десериализация
             bool forProject = true;
-            json js = new json(in TNovClassName, in forProject, out bool canserialize, out string jsonpath);
+            json js = new json(in DBCommandName, in forProject, out bool canserialize, out string jsonpath);
             if (canserialize)
             {
                 viewModel = JsonConvert.DeserializeObject<HolesViewModel>(File.ReadAllText(jsonpath));
@@ -268,9 +282,10 @@ namespace TNovTasks
             }
             catch (Exception ex) { Logger.Log("Ошибка при сериализации: " + ex.Message,4); }
 
-            bool all = viewModel.all; bool visible = viewModel.visible; 
+            bool all = viewModel.all; bool visible = viewModel.visible;
+            #endregion
 
-
+            #region Рабочий вид
             if (visible == true) { workviewid = uidoc.ActiveView.Id; }
 
             if (visible != true)
@@ -346,7 +361,9 @@ namespace TNovTasks
                 }
                 Logger.Log("Вид TNov настроен для работы",1);
             }
+            #endregion
 
+            #region Элементы в работу
             //список отверстий, кроме "плохих", в работу
             List<FamilyInstance> goodHolesList = new List<FamilyInstance>();
             foreach(var h in holesGM)
@@ -394,9 +411,12 @@ namespace TNovTasks
                 foreach (FamilyInstance familyInstance in goodHolesList) holesFinalList.Add(familyInstance);
             }
 
-            int allcount = holesFinalList.Count;
+            #endregion
 
-            
+            int allcount = holesFinalList.Count;
+            bool unhandledError = false;
+
+
 
             if (viewModel.cut || viewModel.pars)
             {
@@ -411,66 +431,76 @@ namespace TNovTasks
                 this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<string>((Func<string>)(() => this.holesProgressBar.value.Text = PBCount.ToString()));
                 this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<double>((Func<double>)(() => this.holesProgressBar.TNov_ProgressBar.Maximum = (double)allcount));
                 this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<string>((Func<string>)(() => this.holesProgressBar.maxvalue.Text = allcount.ToString()));
-
+#region Вырезание
                 if (viewModel.cut)
                 {
+                    
                     Logger.Log("Вырезание отверстий", 1);
 
                     using (Transaction transaction = new Transaction(doc))
                     {
 
-                        transaction.Start("TNov - вырезать отверстия");
-                        Logger.Log("Открываем транзакцию", 1);
-
-                        foreach (FamilyInstance hole in holesFinalList)
+                        try
                         {
-                            PBCount++;
-                            this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<double>((Func<double>)(() => this.holesProgressBar.TNov_ProgressBar.Value = (double)PBCount));
-                            this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<string>((Func<string>)(() => this.holesProgressBar.value.Text = "Вырезание отверстий " + PBCount.ToString()));
+                            transaction.Start("TNov - вырезать отверстия");
+                            Logger.Log("Открываем транзакцию", 1);
 
-                            Element elem1 = doc.GetElement(hole.Id);
-                            BoundingBoxXYZ elem1box = elem1.get_BoundingBox(doc.ActiveView);
-                            Outline outline1 = new Outline(elem1box.Min, elem1box.Max);
-                            BoundingBoxIntersectsFilter bbfilter = new BoundingBoxIntersectsFilter(outline1);
-                            FilteredElementCollector collector = new FilteredElementCollector(doc, workviewid);
-                            ICollection<ElementId> idsExclude = new List<ElementId> { elem1.Id };
-                            collector.Excluding(idsExclude)
-                                    .WherePasses(bbfilter);
-                            Logger.Log("Отверстие " + hole.Id, 2);
-                            foreach (Element elem2 in collector)
+                            foreach (FamilyInstance hole in holesFinalList)
                             {
-                                int catId = elem2.Category.Id.IntegerValue;
-                                bool cutElem2 = false;
-                                foreach (ElementId i in catIds)
+                                PBCount++;
+                                this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<double>((Func<double>)(() => this.holesProgressBar.TNov_ProgressBar.Value = (double)PBCount));
+                                this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<string>((Func<string>)(() => this.holesProgressBar.value.Text = "Вырезание отверстий " + PBCount.ToString()));
+
+                                Element elem1 = doc.GetElement(hole.Id);
+                                BoundingBoxXYZ elem1box = elem1.get_BoundingBox(doc.ActiveView);
+                                Outline outline1 = new Outline(elem1box.Min, elem1box.Max);
+                                BoundingBoxIntersectsFilter bbfilter = new BoundingBoxIntersectsFilter(outline1);
+                                FilteredElementCollector collector = new FilteredElementCollector(doc, workviewid);
+                                ICollection<ElementId> idsExclude = new List<ElementId> { elem1.Id };
+                                collector.Excluding(idsExclude)
+                                        .WherePasses(bbfilter);
+                                Logger.Log("Отверстие " + hole.Id, 2);
+                                foreach (Element elem2 in collector)
                                 {
-                                    if (i.IntegerValue == catId) { cutElem2 = true; break; }
-                                }
-                                if (cutElem2)
-                                {
-                                    try
+                                    int catId = elem2.Category.Id.IntegerValue;
+                                    bool cutElem2 = false;
+                                    foreach (ElementId i in catIds)
                                     {
-                                        Intersections.CutElement(doc, elem2, elem1);
-                                        Logger.Log("   Элемент " + elem2.Id + ": вырезано успешно", 2);
+                                        if (i.IntegerValue == catId) { cutElem2 = true; break; }
                                     }
-                                    catch (Exception ex)
+                                    if (cutElem2)
                                     {
-                                        Logger.Log("   Элемент " + elem2.Id + " Ошибка: " + ex.Message, 4);
+                                        try
+                                        {
+                                            Intersections.CutElement(doc, elem2, elem1);
+                                            Logger.Log("   Элемент " + elem2.Id + ": вырезано успешно", 2);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Logger.Log("   Элемент " + elem2.Id + " Ошибка: " + ex.Message, 4);
+                                        }
                                     }
+
                                 }
 
                             }
 
+
+                            transaction.Commit();
+                            Logger.Log("Закрываем транзакцию", 1);
                         }
-
-
-                        transaction.Commit();
-                        Logger.Log("Закрываем транзакцию", 1);
+                        catch (Exception ex)
+                        {
+                            Logger.Log("Ошибка: " + ex.Message, 4);
+                            new InfoWindow280("Ошибка: " + ex.Message).ShowDialog();
+                            unhandledError = true;
+                        }
                     }
                 }
-
+                #endregion
                 int failscount = 0; 
                 List<string> failed = new List<string>(); //пустой список id элементов с недоступным параметром
-
+ #region Заполнение параметров    
                 if (viewModel.pars)
                 {
                     allcount = allcount + holesW.Count;
@@ -479,108 +509,115 @@ namespace TNovTasks
                     this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<string>((Func<string>)(() => this.holesProgressBar.value.Text = PBCount.ToString()));
 
 
-                    
-                    
+
+                         
 
                     Logger.Log("Заполнение параметров", 1);
 
                     using (Transaction transaction2 = new Transaction(doc))
                     {
-                        transaction2.Start("TNov - отметки отверстий");
-                        Logger.Log("Открываем транзакцию", 1);
-
-                        foreach (var hole in holesFinalList)
+                        try
                         {
-                            PBCount++;
-                            this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<double>((Func<double>)(() => this.holesProgressBar.TNov_ProgressBar.Value = (double)PBCount));
-                            this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<string>((Func<string>)(() => this.holesProgressBar.value.Text = "Заполнение отметок " + PBCount.ToString()));
+                            transaction2.Start("TNov - отметки отверстий");
+                            Logger.Log("Открываем транзакцию", 1);
 
-                            string gmvalue = hole.Symbol.FamilyName;
-                            if (gmvalue != null)
+                            foreach (var hole in holesFinalList)
                             {
-                                if (gmvalue.Contains("ермовкл")) continue;
+                                PBCount++;
+                                this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<double>((Func<double>)(() => this.holesProgressBar.TNov_ProgressBar.Value = (double)PBCount));
+                                this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<string>((Func<string>)(() => this.holesProgressBar.value.Text = "Заполнение отметок " + PBCount.ToString()));
+
+                                string gmvalue = hole.Symbol.FamilyName;
+                                if (gmvalue != null)
+                                {
+                                    if (gmvalue.Contains("ермовкл")) continue;
+                                }
+
+                                string eid = hole.Id.ToString();
+                                Logger.Log("   Элемент" + eid, 2);
+                                try
+                                {
+                                    Element elem = doc.GetElement(hole.Id);
+                                    double otm = elem.get_Parameter(BuiltInParameter.INSTANCE_ELEVATION_PARAM).AsDouble();
+                                    elem.get_Parameter(adskElevLevelparamGuid)?.Set(otm); //Отметка от уровня
+                                    Element level = doc.GetElement(elem.LevelId);
+                                    double elev = level.get_Parameter(BuiltInParameter.LEVEL_ELEV).AsDouble();
+                                    elem.get_Parameter(adskElevLevel2paramGuid)?.Set(elev); //Отметка уровня
+                                    elem.get_Parameter(adskElev0paramGuid)?.Set(otm + elev); //Отметка от нуля
+
+                                    double ze = otm + elev;
+                                    Logger.Log("      параметр ADSK_Отверстие_Отметка от этажа: значение " + otm.ToString(), 2);
+                                    Logger.Log("      параметр ADSK_Отверстие_Отметка этажа: значение " + elev.ToString(), 2);
+                                    Logger.Log("      параметр ADSK_Отверстие_Отметка от нуля: значение " + ze.ToString(), 2);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Logger.Log("   Элемент" + eid + " Ошибка: " + ex.Message, 4);
+                                    failed.Add(eid); failscount++; continue;
+                                }
                             }
 
-                            string eid = hole.Id.ToString();
-                            Logger.Log("   Элемент" + eid, 2);
-                            try
+                            foreach (var hole in holesW)
                             {
-                                Element elem = doc.GetElement(hole.Id);
-                                double otm = elem.get_Parameter(BuiltInParameter.INSTANCE_ELEVATION_PARAM).AsDouble();
-                                elem.get_Parameter(adskElevLevelparamGuid)?.Set(otm); //Отметка от уровня
-                                Element level = doc.GetElement(elem.LevelId);
-                                double elev = level.get_Parameter(BuiltInParameter.LEVEL_ELEV).AsDouble();
-                                elem.get_Parameter(adskElevLevel2paramGuid)?.Set(elev); //Отметка уровня
-                                elem.get_Parameter(adskElev0paramGuid)?.Set(otm + elev); //Отметка от нуля
+                                PBCount++;
+                                this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<double>((Func<double>)(() => this.holesProgressBar.TNov_ProgressBar.Value = (double)PBCount));
+                                this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<string>((Func<string>)(() => this.holesProgressBar.value.Text = "Заполнение отметок " + PBCount.ToString()));
 
-                                double ze = otm + elev;
-                                Logger.Log("      параметр ADSK_Отверстие_Отметка от этажа: значение " + otm.ToString(), 2);
-                                Logger.Log("      параметр ADSK_Отверстие_Отметка этажа: значение " + elev.ToString(), 2);
-                                Logger.Log("      параметр ADSK_Отверстие_Отметка от нуля: значение " + ze.ToString(), 2);
+
+                                string eid = hole.Id.ToString();
+                                Logger.Log("   Элемент" + eid, 2);
+                                try
+                                {
+                                    Element elem = doc.GetElement(hole.Id);
+                                    double otm = elem.get_Parameter(BuiltInParameter.INSTANCE_ELEVATION_PARAM).AsDouble();
+                                    elem.get_Parameter(adskElevLevelparamGuid)?.Set(otm); //Отметка от уровня
+                                    Element level = doc.GetElement(elem.LevelId);
+                                    double elev = level.get_Parameter(BuiltInParameter.LEVEL_ELEV).AsDouble();
+                                    elem.get_Parameter(adskElevLevel2paramGuid)?.Set(elev); //Отметка уровня
+                                    elem.get_Parameter(adskElev0paramGuid)?.Set(otm + elev); //Отметка от нуля
+
+                                    double ze = otm + elev;
+                                    Logger.Log("      параметр ADSK_Отверстие_Отметка от этажа: значение " + otm.ToString(), 2);
+                                    Logger.Log("      параметр ADSK_Отверстие_Отметка этажа: значение " + elev.ToString(), 2);
+                                    Logger.Log("      параметр ADSK_Отверстие_Отметка от нуля: значение " + ze.ToString(), 2);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Logger.Log("   Элемент" + eid + " Ошибка: " + ex.Message, 4);
+                                    failed.Add(eid); failscount++; continue;
+                                }
                             }
-                            catch (Exception ex)
-                            {
-                                Logger.Log("   Элемент" + eid + " Ошибка: " + ex.Message, 4);
-                                failed.Add(eid); failscount++; continue;
-                            }
+
+
+                            transaction2.Commit();
+
+                            Logger.Log("Закрываем транзакцию", 1);
                         }
-
-                        foreach (var hole in holesW)
+                        catch (Exception ex)
                         {
-                            PBCount++;
-                            this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<double>((Func<double>)(() => this.holesProgressBar.TNov_ProgressBar.Value = (double)PBCount));
-                            this.holesProgressBar.TNov_ProgressBar.Dispatcher.Invoke<string>((Func<string>)(() => this.holesProgressBar.value.Text = "Заполнение отметок " + PBCount.ToString()));
-
-
-                            string eid = hole.Id.ToString();
-                            Logger.Log("   Элемент" + eid, 2);
-                            try
-                            {
-                                Element elem = doc.GetElement(hole.Id);
-                                double otm = elem.get_Parameter(BuiltInParameter.INSTANCE_ELEVATION_PARAM).AsDouble();
-                                elem.get_Parameter(adskElevLevelparamGuid)?.Set(otm); //Отметка от уровня
-                                Element level = doc.GetElement(elem.LevelId);
-                                double elev = level.get_Parameter(BuiltInParameter.LEVEL_ELEV).AsDouble();
-                                elem.get_Parameter(adskElevLevel2paramGuid)?.Set(elev); //Отметка уровня
-                                elem.get_Parameter(adskElev0paramGuid)?.Set(otm + elev); //Отметка от нуля
-
-                                double ze = otm + elev;
-                                Logger.Log("      параметр ADSK_Отверстие_Отметка от этажа: значение " + otm.ToString(), 2);
-                                Logger.Log("      параметр ADSK_Отверстие_Отметка этажа: значение " + elev.ToString(), 2);
-                                Logger.Log("      параметр ADSK_Отверстие_Отметка от нуля: значение " + ze.ToString(), 2);
-                            }
-                            catch (Exception ex)
-                            {
-                                Logger.Log("   Элемент" + eid + " Ошибка: " + ex.Message, 4);
-                                failed.Add(eid); failscount++; continue;
-                            }
+                            Logger.Log("Ошибка: " + ex.Message, 4);
+                            new InfoWindow280("Ошибка: " + ex.Message).ShowDialog();
+                            unhandledError = true;
                         }
-
-
-                        transaction2.Commit();
-
-                        Logger.Log("Закрываем транзакцию", 1);
-
                     }
-                    
 
                     
+
                 }
-
-                this.holesProgressBar.Dispatcher.Invoke((System.Action)(() => this.holesProgressBar.Close()));
+#endregion
+                CloseProgressBarSafely();
 
                 if (failscount > 0)
                 {
                     Logger.Log("Открываем окно с ID проблемных элементов: " + String.Join(",", failed), 1);
                     // Диалоговое окно
-                    ElementsTreeWindow window = new ElementsTreeWindow(uiApp, String.Join(",", failed), TNovClassName, dateTime, TNovVersion);
+                    ElementsTreeWindow window = new ElementsTreeWindow(uiApp, String.Join(",", failed), DBCommandName, dateTime, TNovVersion);
                     window.Show();
                     
                 }
             }
-
-            //сценарий "Задания": вывести имена проблемных групп
-
+            #region Задания: имена проблемных групп
+            
             if (scenario == 2)
             {
                 List<string> badNames = new List<string>();
@@ -598,7 +635,12 @@ namespace TNovTasks
                     Logger.Log(badNamesStr,1);
                 }
             }
-            
+            #endregion
+            if (unhandledError)
+            {
+                Logger.Log("Завершение работы с ошибками.", 4);
+                return Result.Succeeded;
+            }
             Logger.Log("Завершение работы.",5);
             return Result.Succeeded;
         }
@@ -625,6 +667,21 @@ namespace TNovTasks
             }
             return currentSelection;
         }
+        private void CloseProgressBarSafely()
+        {
+            if (holesProgressBar != null &&
+                holesProgressBar.Dispatcher != null &&
+                !holesProgressBar.Dispatcher.HasShutdownStarted)
+            {
+                holesProgressBar.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (holesProgressBar.IsLoaded)
+                        holesProgressBar.Close();
+                    // Завершаем цикл сообщений диспетчера, чтобы поток завершился
+                    Dispatcher.CurrentDispatcher.InvokeShutdown();
+                }));
+            }
+        }
     }
-    
+
 }

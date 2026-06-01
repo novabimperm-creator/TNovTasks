@@ -29,7 +29,8 @@ namespace TNovTasks
             docName = docName.Replace(",", " "); string docNameUserName = "_" + userName; docName = docName.Replace(docNameUserName, "");
             // Десериализация данных из базы
             List<HoleGroupBaseItem> existingItems = new List<HoleGroupBaseItem>();
-            string jsonFilePath = nova.novaserver + "_TNov/tasks/" + docName + ".json";
+            TNovConfig config = TNovConfigLoad.LoadConfig();
+            string jsonFilePath = config.ServerPath + "tasks/" + docName + ".json";
             if (File.Exists(jsonFilePath))
             {
                 string jsonContent = File.ReadAllText(jsonFilePath);
@@ -895,9 +896,10 @@ namespace TNovTasks
         public static void SaveGroupsData(in Document doc, in string userName)
         {
             string docName = doc.Title.ToString();
+            TNovConfig config = TNovConfigLoad.LoadConfig();
             //имя и роль пользователя
             string userDepartment = "-";
-            string[] rolesFile = File.ReadAllLines("//fs-nova/Distr/0.For Admin/_TNov/roles.txt");
+            string[] rolesFile = File.ReadAllLines(config.ServerPath+"roles.txt");
             foreach (string role in rolesFile)
             {
                 if (role.Contains(userName))
@@ -920,7 +922,7 @@ namespace TNovTasks
             }
             List<HoleGroupBaseItem> existingItems = new List<HoleGroupBaseItem>();
             // Десериализация
-            string jsonFilePath = nova.novaserver + "_TNov/tasks/" + docName + ".json";
+            string jsonFilePath = config.ServerPath + "tasks/" + docName + ".json";
             if (File.Exists(jsonFilePath))
             {
                 string jsonContent = File.ReadAllText(jsonFilePath);

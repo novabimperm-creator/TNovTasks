@@ -22,29 +22,53 @@ namespace TNovTasks
         
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            string TNovClassName = "Задания Поиск по номеру"; DateTime dateTime = DateTime.Now; string TNovVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            
+            #region Исходные
+            DateTime dateTime = DateTime.Now;
+            string TNovVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            string DBCommandName = "Задания Поиск по номеру";
             //подключение приложения и документа
-            if (RevitAPI.UiApplication == null) {RevitAPI.Initialize(commandData);}
+            if (RevitAPI.UiApplication == null) { RevitAPI.Initialize(commandData); }
             UIDocument uidoc = RevitAPI.UiDocument; Document doc = RevitAPI.Document;
             UIApplication uiApp = RevitAPI.UiApplication; Autodesk.Revit.ApplicationServices.Application rvtApp = uiApp.Application;
-            
-            //проверка подключения, запись в журнал
-            if(ServerUtils.CheckConnection(TNovClassName, TNovVersion)==false) return Result.Failed;
+            string docName = doc.Title.ToString(); docName = docName.Replace(",", " ");
+            string userName = rvtApp.Username; userName = userName.Replace(",", "");
+            string docNameUserName = "_" + userName; docName = docName.Replace(docNameUserName, "");
+            docName = docName.Replace(",", "");
+            #endregion
 
+            TNovConfig config = TNovConfigLoad.LoadConfig(DBCommandName, TNovVersion);
+
+            #region Настройки логов
             // создание log - файла
-            Logger.Initialize(TNovClassName,dateTime,TNovVersion);
-            
+            Logger.Initialize(DBCommandName, dateTime, TNovVersion);
 
-            
+            var viewModel0 = new AppVersionViewModel();
 
-            
+            string jsonpath0 = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "TNovClient/TNovSettings.json");
+            viewModel0 = JsonConvert.DeserializeObject<AppVersionViewModel>(File.ReadAllText(jsonpath0));
+            if (viewModel0.extendedLogs)
+
+            {
+                var qViewModel = new QuestionWindowViewModel();
+                qViewModel.headtxt = "Включены расширенные логи. " +
+                    "Плагин будет работать медленнее, но соберет больше данных. " +
+                    "Выключить расширенные логи для ускорения работы?";
+                var qwpfview = new QuestionWindow280(qViewModel);
+                qViewModel.CloseRequest += (s, e) => qwpfview.Close();
+                bool? qok = qwpfview.ShowDialog();
+                if (qok != null && qok == true) { Logger.TurnOffExtendedLogs(); } else Logger.Log("Расширенные логи вкл", 2);
+            }
+            #endregion
+
+            #region Диалог
 
             Logger.Log("Открываем диалоговое окно",1);
             // Диалоговое окно
             var viewModel = new IdSelectionTasksViewModel();
             // Десериализация
             bool forProject = false;
-            json js = new json(in TNovClassName, in forProject, out bool canserialize, out string jsonpath);
+            json js = new json(in DBCommandName, in forProject, out bool canserialize, out string jsonpath);
             if (canserialize) 
             {
                 viewModel = JsonConvert.DeserializeObject<IdSelectionTasksViewModel>(File.ReadAllText(jsonpath));
@@ -62,7 +86,8 @@ namespace TNovTasks
                 Logger.Log("Сериализация прошла успешно",1);
             }
             catch (Exception ex) { Logger.Log("Ошибка при сериализации: "+ex.Message,4); }
-            
+            #endregion
+
             bool runIt = false;
             string ids = viewModel.elemids;
             bool isolate = viewModel.isolate;
@@ -70,6 +95,7 @@ namespace TNovTasks
             
             string[] s_ids = ids.Split(',');
 
+            #region Восстановление вида
             Logger.Log("Завершаем изоляцию вида", 1);
             string viewtype = RevitAPI.UiDocument.ActiveGraphicalView.Title;
             Autodesk.Revit.DB.View3D view3d;
@@ -78,7 +104,6 @@ namespace TNovTasks
                                                                          .WhereElementIsNotElementType()    //фильтр только экземпляры
                                                                          .Cast<View>()                     //элементы категории Виды
                                                                          .ToList();                         //формируем список
-            string userName = rvtApp.Username;
             bool dws = doc.IsWorkshared;
             string viewName = "{3D}";
             if (dws)
@@ -101,8 +126,8 @@ namespace TNovTasks
                 trans1.Commit();
                 Logger.Log("Закрываем транзакцию 1", 1);
             }
-
-            //Поиск элементов
+            #endregion
+            #region Сбор элементов
             List<FamilyInstance> GMs = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_GenericModel)   //фильтр по категории Об модели
                                                                          .WhereElementIsNotElementType()
                                                                          .OfClass(typeof(FamilyInstance))
@@ -125,7 +150,7 @@ namespace TNovTasks
                 new InfoWindow280("Отсутствуют элементы с заданными марками.").ShowDialog();
                 Logger.Log("Отсутствуют элементы с заданными марками. Завершение работы.", 3); return Result.Cancelled;
             }
-
+            #endregion
             // Выделяем элементы
             uidoc.Selection.SetElementIds(GMIds.ToArray());
             Logger.Log("Элементы "+ids+" выделены",1);
@@ -143,7 +168,7 @@ namespace TNovTasks
             if (isolate && cutview && viewtype.Contains("3D")) { runIt = true; }
             else if (isolate) { runIt = true; }
             else if (cutview && viewtype.Contains("3D")) { runIt = true; }
-
+            #region Основной код
             if (runIt)
             {
                 using (Transaction trans2 = new Transaction(doc))
@@ -205,7 +230,7 @@ namespace TNovTasks
                     }
                 }
             }
-
+            #endregion
             Logger.Log("Завершение работы.",5);
 
             return Result.Succeeded;

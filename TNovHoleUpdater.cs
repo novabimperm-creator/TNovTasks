@@ -85,12 +85,8 @@ namespace TNovTasks
 
             if (taskModel) 
             {
-                //проверка подключения к серверу
-                string usagefilePath = nova.novaserver + "_TNov/usage.txt";
-                bool servercheck = File.Exists(usagefilePath);
-
-                if (servercheck)
-                {
+                
+                
                     foreach (ElementId id in ids)
                     {
                         Element elem = doc.GetElement(id);
@@ -125,9 +121,10 @@ namespace TNovTasks
                                 //система отслеживания
 
                                 //имя и роль пользователя
+                                TNovConfig config = TNovConfigLoad.LoadConfig();
                                 string userName = app.Username;
                                 string userDepartment = "-"; string userDepRole = "-";
-                                string[] rolesFile = File.ReadAllLines("//fs-nova/Distr/0.For Admin/_TNov/roles.txt");
+                                string[] rolesFile = File.ReadAllLines(config.ServerPath+"roles.txt");
                                 foreach (string role in rolesFile)
                                 {
                                     if (role.Contains(userName))
@@ -345,7 +342,7 @@ namespace TNovTasks
 
                     }
 
-                }
+                
             }
 
             

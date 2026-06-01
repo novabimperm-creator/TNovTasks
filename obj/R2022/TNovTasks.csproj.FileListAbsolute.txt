@@ -1,0 +1,23 @@
+\\fs-nova\Distr\0.For Admin\_TNov\build\2022\TNovTasks.dll.config
+\\fs-nova\Distr\0.For Admin\_TNov\build\2022\TNovTasks.dll
+\\fs-nova\Distr\0.For Admin\_TNov\build\2022\TNovTasks.pdb
+Z:\DEV\TNovTasks\obj\R2022\TNovTasks.csproj.AssemblyReference.cache
+Z:\DEV\TNovTasks\obj\R2022\CommentsWindow280.baml
+Z:\DEV\TNovTasks\obj\R2022\CommentsWindow280.g.cs
+Z:\DEV\TNovTasks\obj\R2022\HolesWPF.g.cs
+Z:\DEV\TNovTasks\obj\R2022\IdSelectionTasksWPF.g.cs
+Z:\DEV\TNovTasks\obj\R2022\TaskDetailsWPF.g.cs
+Z:\DEV\TNovTasks\obj\R2022\TaskListNewWPF.g.cs
+Z:\DEV\TNovTasks\obj\R2022\TaskListWPF.g.cs
+Z:\DEV\TNovTasks\obj\R2022\TNovTasks_MarkupCompile.cache
+Z:\DEV\TNovTasks\obj\R2022\TNovTasks_MarkupCompile.lref
+Z:\DEV\TNovTasks\obj\R2022\HolesWPF.baml
+Z:\DEV\TNovTasks\obj\R2022\IdSelectionTasksWPF.baml
+Z:\DEV\TNovTasks\obj\R2022\TaskDetailsWPF.baml
+Z:\DEV\TNovTasks\obj\R2022\TaskListNewWPF.baml
+Z:\DEV\TNovTasks\obj\R2022\TaskListWPF.baml
+Z:\DEV\TNovTasks\obj\R2022\TNovTasks.g.resources
+Z:\DEV\TNovTasks\obj\R2022\TNovTasks.csproj.CoreCompileInputs.cache
+Z:\DEV\TNovTasks\obj\R2022\TNovTasks.csproj.Up2Date
+Z:\DEV\TNovTasks\obj\R2022\TNovTasks.dll
+Z:\DEV\TNovTasks\obj\R2022\TNovTasks.pdb
