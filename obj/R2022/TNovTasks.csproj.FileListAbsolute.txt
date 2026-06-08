@@ -21,3 +21,11 @@ Z:\DEV\TNovTasks\obj\R2022\TNovTasks.csproj.CoreCompileInputs.cache
 Z:\DEV\TNovTasks\obj\R2022\TNovTasks.csproj.Up2Date
 Z:\DEV\TNovTasks\obj\R2022\TNovTasks.dll
 Z:\DEV\TNovTasks\obj\R2022\TNovTasks.pdb
+\\fs-nova\Distr\0.For Admin\_TNov\build\2022\runtimes\win-x86\native\WebView2Loader.dll
+\\fs-nova\Distr\0.For Admin\_TNov\build\2022\runtimes\win-x64\native\WebView2Loader.dll
+\\fs-nova\Distr\0.For Admin\_TNov\build\2022\runtimes\win-arm64\native\WebView2Loader.dll
+Z:\DEV\TNovTasks\obj\R2022\LevelSelectionWindow.baml
+Z:\DEV\TNovTasks\obj\R2022\LevelSelectionWindow.g.cs
+Z:\DEV\TNovTasks\obj\R2022\ResultsWindow.g.cs
+Z:\DEV\TNovTasks\obj\R2022\GeneratedInternalTypeHelper.g.cs
+Z:\DEV\TNovTasks\obj\R2022\ResultsWindow.baml

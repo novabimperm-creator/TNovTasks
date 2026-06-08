@@ -49,6 +49,7 @@
     <Compile Include="CommentsWindow280.xaml.cs">
       <DependentUpon>CommentsWindow280.xaml</DependentUpon>
     </Compile>
+    <Compile Include="CopyHolesCommand.cs" />
     <Compile Include="Hole.cs" />
     <Compile Include="Holes.cs" />
     <Compile Include="HolesCheckDynamo.cs" />
@@ -61,7 +62,13 @@
     <Compile Include="IdSelectionTasksWPF.xaml.cs">
       <DependentUpon>IdSelectionTasksWPF.xaml</DependentUpon>
     </Compile>
+    <Compile Include="LevelSelectionWindow.xaml.cs">
+      <DependentUpon>LevelSelectionWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ResultsWindow.xaml.cs">
+      <DependentUpon>ResultsWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="TaskDetailsViewModel.cs" />
     <Compile Include="TaskDetailsWPF.xaml.cs">
       <DependentUpon>TaskDetailsWPF.xaml</DependentUpon>
@@ -93,6 +100,14 @@
     <Page Include="IdSelectionTasksWPF.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
+    </Page>
+    <Page Include="LevelSelectionWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ResultsWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="TaskDetailsWPF.xaml">
       <Generator>MSBuild:Compile</Generator>
