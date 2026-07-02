@@ -229,12 +229,12 @@ namespace TNovTasks
                         if(group.Name == badGroupName)
                         {
                             //элементы "плохой" группы
-                            ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN.Отверстие", true));
+                            ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Отверстие"));
                             IList<ElementId> groupElems = group.GetDependentElements(elementFilter);
                             if (groupElems.Count > 0)
                             {
                                 groupHasHoles = true; Logger.Log("   отверстия есть", 2);
-                                foreach (var groupElem in groupElems) badHoles.Add(groupElem.IntegerValue);
+                                foreach (var groupElem in groupElems) badHoles.Add(RevitApiCompat.ElementIdIntValue(groupElem));
                             }
                         }
                     }
@@ -368,7 +368,7 @@ namespace TNovTasks
             List<FamilyInstance> goodHolesList = new List<FamilyInstance>();
             foreach(var h in holesGM)
             {
-                int hId = h.Id.IntegerValue; int b = 0;
+                int hId = RevitApiCompat.ElementIdIntValue(h.Id); int b = 0;
                 foreach(var badHole in badHoles)
                 {
                     if (hId == badHole) b++;
@@ -462,11 +462,11 @@ namespace TNovTasks
                                 Logger.Log("Отверстие " + hole.Id, 2);
                                 foreach (Element elem2 in collector)
                                 {
-                                    int catId = elem2.Category.Id.IntegerValue;
+                                    int catId = RevitApiCompat.ElementIdIntValue(elem2.Category.Id);
                                     bool cutElem2 = false;
                                     foreach (ElementId i in catIds)
                                     {
-                                        if (i.IntegerValue == catId) { cutElem2 = true; break; }
+                                        if (RevitApiCompat.ElementIdIntValue(i) == catId) { cutElem2 = true; break; }
                                     }
                                     if (cutElem2)
                                     {

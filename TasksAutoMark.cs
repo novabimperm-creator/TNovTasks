@@ -160,7 +160,7 @@ namespace TNovTasks
                     }
 
                     //заполняем Марку если пустая - пока только для отверстий
-                    ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(new ElementId(-1002002), "pmN.Отверстие", true));
+                    ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(new ElementId(-1002002), "pmN.Отверстие"));
                     IList<ElementId> groupElems = group.GetDependentElements(elementFilter);
 
                     List<Element> elemsWithoutMark = new List<Element>();

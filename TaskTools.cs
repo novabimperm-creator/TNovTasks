@@ -158,11 +158,11 @@ namespace TNovTasks
                 if (nameParts.Length > 2) shortName = nameParts[0] + '_' + nameParts[1] + '_' + nameParts[2]; //учет групп, созданных по старой концепции
                 string status = "";
                 //проверяем элементы в задании на заполненность Марки
-                ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN.Отверстие", true));
+                ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Отверстие"));
                 IList<ElementId> linkGroupElems = linkGroup.GetDependentElements(elementFilter);
-                ElementFilter elementFilter21 = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN.Рама под оборудование", true));
-                ElementFilter elementFilter22 = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN.Задание на шахту", true));
-                ElementFilter elementFilter23 = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN.Задание на приямок", true));
+                ElementFilter elementFilter21 = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Рама под оборудование"));
+                ElementFilter elementFilter22 = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Задание на шахту"));
+                ElementFilter elementFilter23 = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Задание на приямок"));
                 List<ElementId> linkGroupElems21 = linkGroup.GetDependentElements(elementFilter21).ToList();
                 List<ElementId> linkGroupElems22 = linkGroup.GetDependentElements(elementFilter22).ToList();
                 List<ElementId> linkGroupElems23 = linkGroup.GetDependentElements(elementFilter23).ToList();
@@ -308,12 +308,12 @@ namespace TNovTasks
                 {
                     if (writeLogs) Logger.Log("Группа для обработки: " + shortName, 2);
                     //отверстия группы в связанной модели
-                    ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN.Отверстие", true));
+                    ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Отверстие"));
                     IList<ElementId> linkGroupElems = linkGroup.GetDependentElements(elementFilter);
                     //прочие задания группы в связанной модели
-                    ElementFilter elementFilter21 = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN.Рама под оборудование", true));
-                    ElementFilter elementFilter22 = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN.Задание на шахту", true));
-                    ElementFilter elementFilter23 = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN.Задание на приямок", true));
+                    ElementFilter elementFilter21 = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Рама под оборудование"));
+                    ElementFilter elementFilter22 = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Задание на шахту"));
+                    ElementFilter elementFilter23 = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Задание на приямок"));
                     List<ElementId> linkGroupElems21 = linkGroup.GetDependentElements(elementFilter21).ToList();
                     List<ElementId> linkGroupElems22 = linkGroup.GetDependentElements(elementFilter22).ToList();
                     List<ElementId> linkGroupElems23 = linkGroup.GetDependentElements(elementFilter23).ToList();
@@ -414,7 +414,7 @@ namespace TNovTasks
                                         if (elem_mark == linkElem_mark) //нашли отверстие с той же маркой
                                         {
                                             linkElem_pasted = true;
-                                            id1 = groupElem.IntegerValue;
+                                            id1 = RevitApiCompat.ElementIdIntValue(groupElem);
                                             if (writeLogs) Logger.Log("   найдено в текущей модели", 2);
 
                                             int d = 0;
@@ -501,7 +501,7 @@ namespace TNovTasks
                                                 if (elem_mark == linkElem_mark)
                                                 {
                                                     linkElem_pasted = true;
-                                                    id1 = elem.Id.IntegerValue;
+                                                    id1 = RevitApiCompat.ElementIdIntValue(elem.Id);
                                                     if (writeLogs) Logger.Log("   найдено в текущей модели", 2);
 
                                                     double elem_width = elem.get_Parameter(widthParam).AsDouble() * 0.3048 * 1000;
@@ -630,7 +630,7 @@ namespace TNovTasks
                                         if (elem_mark == linkElem_mark) //нашли задание с той же маркой
                                         {
                                             linkElem_pasted = true;
-                                            id1 = groupElem.IntegerValue;
+                                            id1 = RevitApiCompat.ElementIdIntValue(groupElem);
                                             if (writeLogs) Logger.Log("   найдено в текущей модели", 2);
 
                                             double elem_length = elem.get_Parameter(adskLengthParamGuid).AsDouble() * 0.3048 * 1000;
@@ -692,7 +692,7 @@ namespace TNovTasks
                                                 if (elem_mark == linkElem_mark)
                                                 {
                                                     linkElem_pasted = true;
-                                                    id1 = elem.Id.IntegerValue;
+                                                    id1 = RevitApiCompat.ElementIdIntValue(elem.Id);
                                                     if (writeLogs) Logger.Log("   найдено в текущей модели", 2);
 
                                                     double elem_length = elem.get_Parameter(adskLengthParamGuid).AsDouble() * 0.3048 * 1000;
@@ -816,7 +816,7 @@ namespace TNovTasks
                                         y = elem_y,
                                         z = elem_z,
                                         status = st,
-                                        id1 = groupElem.IntegerValue,
+                                        id1 = RevitApiCompat.ElementIdIntValue(groupElem),
                                     };
                                     holes.Add(hole);
                                 }
@@ -866,7 +866,7 @@ namespace TNovTasks
                                         y = elem_y,
                                         z = elem_z,
                                         status = st,
-                                        id1 = groupElem.IntegerValue,
+                                        id1 = RevitApiCompat.ElementIdIntValue(groupElem),
                                     };
                                     holes.Add(hole);
                                 }
@@ -1009,7 +1009,7 @@ namespace TNovTasks
                 {
                     maxNumber = elemNum;
                     ElementId groupId = elem.GroupId;
-                    if (groupId.IntegerValue > 0)
+                    if (RevitApiCompat.ElementIdIntValue(groupId) > 0)
                     {
                         Element g = doc.GetElement(groupId);
                         groupName = g.Name;
@@ -1141,7 +1141,7 @@ namespace TNovTasks
                         else if (gmvalue.Contains("Рама")) holesGM.Add(GM);
                     }
                 }
-                ElementId elementId = new ElementId(0);
+                ElementId elementId = RevitApiCompat.CreateElementId(0);
                 foreach (FamilyInstance hole in holesGM)
                 {
                     Element elem = (Element)hole;
@@ -1152,7 +1152,7 @@ namespace TNovTasks
                     }
                 }
 
-                if (elementId.IntegerValue != 0)
+                if (RevitApiCompat.ElementIdIntValue(elementId) != 0)
                 {
                     string groupName = "";
                     Group targetGroupInLink = null;
@@ -1165,7 +1165,7 @@ namespace TNovTasks
                         if (nameParts.Length > 2) shortName = nameParts[0] + '_' + nameParts[1] + '_' + nameParts[2];
 
                         //элементы группы в связанной модели
-                        ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN", true));
+                        ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN"));
                         IList<ElementId> linkGroupElems = linkGroup.GetDependentElements(elementFilter);
 
                         foreach (ElementId linkGroupElem in linkGroupElems)
@@ -1417,7 +1417,7 @@ namespace TNovTasks
                             List<ElementId> newGroupElementIds = new List<ElementId>();
                             foreach (ElementId eId in ungroupedElementIds)
                             {
-                                if (eId.IntegerValue != elem.Id.IntegerValue) newGroupElementIds.Add(eId);
+                                if (RevitApiCompat.ElementIdIntValue(eId) != RevitApiCompat.ElementIdIntValue(elem.Id)) newGroupElementIds.Add(eId);
                             }
                             Logger.Log("Группа разгруппирована", 2);
 
@@ -1561,7 +1561,7 @@ namespace TNovTasks
                         else if (gmvalue.Contains("Рама")) holesGM.Add(GM);
                     }
                 }
-                ElementId elementId = new ElementId(0);
+                ElementId elementId = RevitApiCompat.CreateElementId(0);
                 foreach (FamilyInstance hole in holesGM)
                 {
                     Element elem = (Element)hole;
@@ -1572,7 +1572,7 @@ namespace TNovTasks
                     }
                 }
 
-                if (elementId.IntegerValue != 0)
+                if (RevitApiCompat.ElementIdIntValue(elementId) != 0)
                 {
                     //открытие 3д-вида
                     Autodesk.Revit.DB.View3D view3d;

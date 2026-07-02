@@ -53,9 +53,9 @@ namespace TNovTasks
                     List<ElementId> idsM = data.GetModifiedElementIds().ToList();
                     List<ElementId> ids = new List<ElementId>();
 
-                    ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN.Рама под оборудование", true));
-                    ElementFilter elementFilter2 = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN.Задание на шахту", true));
-                    ElementFilter elementFilter3 = (ElementFilter)new ElementParameterFilter(ParameterFilterRuleFactory.CreateContainsRule(familyNameParamId, "pmN.Задание на приямок", true));
+                    ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Рама под оборудование"));
+                    ElementFilter elementFilter2 = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Задание на шахту"));
+                    ElementFilter elementFilter3 = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Задание на приямок"));
 
                     foreach (var id in idsA)
                     {
@@ -81,7 +81,7 @@ namespace TNovTasks
                         if (null != elem)
                         {
                             //заполнение группирования
-                            if (elem.GroupId.IntegerValue != -1) //отверстие - в группе
+                            if (RevitApiCompat.ElementIdIntValue(elem.GroupId) != -1) //отверстие - в группе
                             {
                                 Element group = doc.GetElement(elem.GroupId);
                                 if (group != null)

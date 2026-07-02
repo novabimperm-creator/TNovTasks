@@ -1,4 +1,3 @@
-\\fs-nova\Distr\0.For Admin\_TNov\build\2022\TNovTasks.dll.config
 \\fs-nova\Distr\0.For Admin\_TNov\build\2022\TNovTasks.dll
 \\fs-nova\Distr\0.For Admin\_TNov\build\2022\TNovTasks.pdb
 Z:\DEV\TNovTasks\obj\R2022\TNovTasks.csproj.AssemblyReference.cache
@@ -21,11 +20,29 @@ Z:\DEV\TNovTasks\obj\R2022\TNovTasks.csproj.CoreCompileInputs.cache
 Z:\DEV\TNovTasks\obj\R2022\TNovTasks.csproj.Up2Date
 Z:\DEV\TNovTasks\obj\R2022\TNovTasks.dll
 Z:\DEV\TNovTasks\obj\R2022\TNovTasks.pdb
-\\fs-nova\Distr\0.For Admin\_TNov\build\2022\runtimes\win-x86\native\WebView2Loader.dll
 \\fs-nova\Distr\0.For Admin\_TNov\build\2022\runtimes\win-x64\native\WebView2Loader.dll
-\\fs-nova\Distr\0.For Admin\_TNov\build\2022\runtimes\win-arm64\native\WebView2Loader.dll
 Z:\DEV\TNovTasks\obj\R2022\LevelSelectionWindow.baml
 Z:\DEV\TNovTasks\obj\R2022\LevelSelectionWindow.g.cs
 Z:\DEV\TNovTasks\obj\R2022\ResultsWindow.g.cs
 Z:\DEV\TNovTasks\obj\R2022\GeneratedInternalTypeHelper.g.cs
 Z:\DEV\TNovTasks\obj\R2022\ResultsWindow.baml
+Z:\DEV\_buildtest\r2022\runtimes\win-x64\native\WebView2Loader.dll
+Z:\DEV\_buildtest\r2022\TNovTasks.dll
+Z:\DEV\_buildtest\r2022\TNovTasks.pdb
+Z:\DEV\TNovTasks\obj\R2022\UserControl1.g.cs
+Z:\DEV\TNovTasks\obj\R2022\UserControl1.baml
+Z:\DEV\TNovTasks\obj\R2022\TNovTasks.GeneratedMSBuildEditorConfig.editorconfig
+Z:\DEV\TNovTasks\obj\R2022\TNovTasks.sourcelink.json
+Z:\DEV\_buildtest\tasks2022\runtimes\win-x64\native\WebView2Loader.dll
+Z:\DEV\_buildtest\tasks2022\TNovTasks.dll
+Z:\DEV\_buildtest\tasks2022\TNovTasks.pdb
+Z:\DEV\_build-test\2022\runtimes\win-x64\native\WebView2Loader.dll
+Z:\DEV\_build-test\2022\TNovTasks.dll
+Z:\DEV\_build-test\2022\TNovTasks.pdb
+Z:\DEV\_build-test\2022-classic\runtimes\win-x64\native\WebView2Loader.dll
+Z:\DEV\_build-test\2022-classic\TNovTasks.dll
+Z:\DEV\_build-test\2022-classic\TNovTasks.pdb
+Z:\DEV\_build-test\2022-fix\runtimes\win-x64\native\WebView2Loader.dll
+Z:\DEV\_build-test\2022-fix\TNovTasks.dll
+Z:\DEV\_build-test\2022-fix\TNovTasks.pdb
+\\fs-nova\Distr\0.For Admin\_TNov\build\2022\System.Resources.Extensions.dll
