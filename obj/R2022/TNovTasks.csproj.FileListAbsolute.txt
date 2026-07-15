@@ -7,14 +7,12 @@ Z:\DEV\TNovTasks\obj\R2022\HolesWPF.g.cs
 Z:\DEV\TNovTasks\obj\R2022\IdSelectionTasksWPF.g.cs
 Z:\DEV\TNovTasks\obj\R2022\TaskDetailsWPF.g.cs
 Z:\DEV\TNovTasks\obj\R2022\TaskListNewWPF.g.cs
-Z:\DEV\TNovTasks\obj\R2022\TaskListWPF.g.cs
 Z:\DEV\TNovTasks\obj\R2022\TNovTasks_MarkupCompile.cache
 Z:\DEV\TNovTasks\obj\R2022\TNovTasks_MarkupCompile.lref
 Z:\DEV\TNovTasks\obj\R2022\HolesWPF.baml
 Z:\DEV\TNovTasks\obj\R2022\IdSelectionTasksWPF.baml
 Z:\DEV\TNovTasks\obj\R2022\TaskDetailsWPF.baml
 Z:\DEV\TNovTasks\obj\R2022\TaskListNewWPF.baml
-Z:\DEV\TNovTasks\obj\R2022\TaskListWPF.baml
 Z:\DEV\TNovTasks\obj\R2022\TNovTasks.g.resources
 Z:\DEV\TNovTasks\obj\R2022\TNovTasks.csproj.CoreCompileInputs.cache
 Z:\DEV\TNovTasks\obj\R2022\TNovTasks.csproj.Up2Date
@@ -24,7 +22,6 @@ Z:\DEV\TNovTasks\obj\R2022\TNovTasks.pdb
 Z:\DEV\TNovTasks\obj\R2022\LevelSelectionWindow.baml
 Z:\DEV\TNovTasks\obj\R2022\LevelSelectionWindow.g.cs
 Z:\DEV\TNovTasks\obj\R2022\ResultsWindow.g.cs
-Z:\DEV\TNovTasks\obj\R2022\GeneratedInternalTypeHelper.g.cs
 Z:\DEV\TNovTasks\obj\R2022\ResultsWindow.baml
 Z:\DEV\_buildtest\r2022\runtimes\win-x64\native\WebView2Loader.dll
 Z:\DEV\_buildtest\r2022\TNovTasks.dll
@@ -46,3 +43,7 @@ Z:\DEV\_build-test\2022-fix\runtimes\win-x64\native\WebView2Loader.dll
 Z:\DEV\_build-test\2022-fix\TNovTasks.dll
 Z:\DEV\_build-test\2022-fix\TNovTasks.pdb
 \\fs-nova\Distr\0.For Admin\_TNov\build\2022\System.Resources.Extensions.dll
+Z:\DEV\_build\TNov\runtimes\win-x64\native\WebView2Loader.dll
+Z:\DEV\_build\TNov\System.Resources.Extensions.dll
+Z:\DEV\_build\TNov\TNovTasks.dll
+Z:\DEV\_build\TNov\TNovTasks.pdb

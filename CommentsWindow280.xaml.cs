@@ -43,10 +43,10 @@ namespace TNovTasks
             this.Close();
         }
 
-        private void Border_MouseDown(object sender, MouseButtonEventArgs e)
+        private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.LeftButton == MouseButtonState.Pressed)
-                this.DragMove();
+            if (e.ChangedButton == MouseButton.Left)
+                DragMove();
         }
     }
 }
