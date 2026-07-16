@@ -36,7 +36,10 @@ namespace TNovTasks
 
             TNovConfig config = TNovConfigLoad.LoadConfig(DBCommandName, TNovVersion);
 
-            
+            bool useTNovPRO = false;
+            if (config.CorpName == "ООО ПМ Новация") useTNovPRO = true;
+
+
 
             if (docName.Contains("Задани") || docName.Contains("задани") || docName.Contains("-ЗД") || docName.Contains("_ЗД") || docName.Contains("ЗАДАНИЕ")) { }
             else
