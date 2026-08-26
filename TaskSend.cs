@@ -70,6 +70,35 @@ namespace TNovTasks
             }
             #endregion
 
+            #region Авторизация в TNovPRO
+            // Только для пермской конфигурации (useTNovPRO выше): в остальных
+            // сборках выдача заданий работает по-прежнему, через JSON на сервере.
+            // Вход — через браузер, как в TNovUtils/Issues; сессия живёт между
+            // нажатиями кнопки, поэтому обычно ничего не открывается вовсе.
+            TasksPro.ProApiSession proSession = null;
+            if (useTNovPRO)
+            {
+                bool proAuthorized = false;
+                try
+                {
+                    proSession = TasksPro.ProApiSession.Instance;
+                    proAuthorized = TasksPro.ProApiSession.RunSync(() => proSession.EnsureAuthAsync());
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log("TNovPRO: ошибка входа — " + ex.Message, 4);
+                }
+
+                if (!proAuthorized)
+                {
+                    new InfoWindow280("Авторизуйтесь в TNovPRO для возможности выдать задание!").ShowDialog();
+                    Logger.Log("Нет авторизации в TNovPRO. Завершение работы", 4);
+                    return Result.Failed;
+                }
+                Logger.Log("TNovPRO: сессия готова", 1);
+            }
+            #endregion
+
             #region Выборка
             //запускаем для уже выбранных групп
             Logger.Log("Анализ текущей выборки", 1);
@@ -180,10 +209,20 @@ namespace TNovTasks
             }
             #endregion
 
+            List<object> proItems = new List<object>();
             foreach (var item in itemsForComments) //добавлено 05.2026 - заполнение истории выдачи
             {
                 item.AppendVersionComment(item.NewComment);
                 item.NewComment = null;   // очищаем временное поле
+
+                // Для TNovPRO собираем ТЕ ЖЕ элементы: платформа принимает родную
+                // форму HoleGroupBaseItem и разбирает её сама. Собираем здесь, а
+                // отправляем ниже одной посылкой — после того, как JSON на сервере
+                // записан. Иначе при сбое записи задание было бы на сайте и не было
+                // бы на диске, а версии двух журналов разошлись бы.
+                // 🔴 Сам элемент не трогаем: этот же объект сериализуется в JSON на
+                // сервере. Имя модели уходит отдельным полем посылки.
+                if (useTNovPRO) proItems.Add(item);
             }
 
             string updatedJson = JsonConvert.SerializeObject(existingItems, Formatting.Indented);
@@ -199,11 +238,36 @@ namespace TNovTasks
             {
                 File.WriteAllText(jsonFilePath, updatedJson);
 
+                // ── Отправка в TNovPRO ───────────────────────────────────────
+                // Диск записан — теперь то же самое уходит в журнал заданий на
+                // сайте. Ключ записи там (модель, имя группы) — тот же, которым
+                // мы только что подняли версию в JSON, поэтому перевыдача
+                // обновляет задание, а не создаёт второе.
+                string proLine = null;
+                if (useTNovPRO && proSession != null && proItems.Count > 0)
+                {
+                    var sendResult = TasksPro.ProApiSession.RunSync(
+                        () => proSession.SendTasksAsync(docName, proItems));
+
+                    if (sendResult.Ok)
+                    {
+                        proLine = "Задания появятся на сайте TNovPRO (принято: " + sendResult.Accepted + ").";
+                        Logger.Log("TNovPRO: принято заданий " + sendResult.Accepted, 1);
+                    }
+                    else
+                    {
+                        // Молчать здесь нельзя: на диске задание есть, на сайте
+                        // нет, и человек будет уверен, что коллеги уведомлены.
+                        proLine = "На сайт TNovPRO задания НЕ ушли: " + sendResult.Error;
+                        Logger.Log("TNovPRO: отправка не удалась — " + sendResult.Detail, 4);
+                    }
+                }
+
                 // Диалоговое окно
                 var viewModel2 = new InfoWindowTextFieldViewModel();
                 viewModel2.headtxt = "Задания успешно отправлены:";
                 viewModel2.ids = String.Join("\n", names);
-                viewModel2.lowtxt = "Они появятся в Журнале заданий с уведомлением.";
+                viewModel2.lowtxt = proLine ?? "Они появятся в Журнале заданий с уведомлением.";
                 var wpfview2 = new InfoWindowTextField(viewModel2);
                 bool? ok2 = wpfview2.ShowDialog();
             }

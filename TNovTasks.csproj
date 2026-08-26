@@ -16,6 +16,13 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
+  <!-- Связь с TNovPRO (папка TasksPro): HttpClient и DPAPI. На .NET Framework
+       SDK-проект эти сборки сам не подтягивает. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Security" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\TNovCommon\TNovCommon.csproj" Private="false" />
   </ItemGroup>
