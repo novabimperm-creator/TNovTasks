@@ -18,6 +18,10 @@ namespace TNovTasks.TasksPro
         public string Error;          // текст для человека, если не ок
         public string Detail;         // подробность для лога
         public List<string> Titles = new List<string>();  // «№12 ОВ_КР.Стены_этаж -1»
+
+        /// <summary>Имя группы → id задания на сайте. По нему догружается 3D группы.</summary>
+        public Dictionary<string, string> IdsByName =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -146,7 +150,13 @@ namespace TNovTasks.TasksPro
                         {
                             result.Accepted = arr.Count;
                             foreach (var t in arr)
-                                result.Titles.Add("№" + t["number"] + " " + (string)t["name"]);
+                            {
+                                var name = (string)t["name"];
+                                var id = (string)t["id"];
+                                result.Titles.Add("№" + t["number"] + " " + name);
+                                if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(id))
+                                    result.IdsByName[name] = id;
+                            }
                         }
                     }
                     catch { /* приняли — а разбор ответа не критичен */ }
@@ -161,6 +171,41 @@ namespace TNovTasks.TasksPro
                 result.Detail = ex.ToString();
                 return result;
             }
+        }
+
+        /// <summary>
+        /// Залить .glb группы задания (multipart, поле «file»). Сервер принимает
+        /// только настоящий glTF-binary и не больше 40 МБ; повторная заливка
+        /// заменяет прежнюю. Ошибку возвращаем текстом: 3D — дополнение к заданию,
+        /// и выдача из-за него падать не должна.
+        /// </summary>
+        public async Task<string> UploadGeometryAsync(string taskId, byte[] glb)
+        {
+            if (string.IsNullOrEmpty(taskId) || glb == null || glb.Length == 0) return "нечего заливать";
+            try
+            {
+                Func<HttpRequestMessage> make = () =>
+                {
+                    var content = new MultipartFormDataContent();
+                    var file = new ByteArrayContent(glb);
+                    file.Headers.ContentType = new MediaTypeHeaderValue("model/gltf-binary");
+                    content.Add(file, "file", "group.glb");
+
+                    var req = new HttpRequestMessage(HttpMethod.Post,
+                        new Uri(Config.BaseUri, "api/tasks/" + taskId + "/geometry")) { Content = content };
+                    if (!string.IsNullOrEmpty(Tokens.AccessToken))
+                        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Tokens.AccessToken);
+                    return req;
+                };
+
+                using (var resp = await SendWithRetryAsync(make))
+                {
+                    if (resp.IsSuccessStatusCode) return null;
+                    string text = resp.Content != null ? await resp.Content.ReadAsStringAsync() : "";
+                    return "HTTP " + (int)resp.StatusCode + " " + Cut(text, 300);
+                }
+            }
+            catch (Exception ex) { return ex.Message; }
         }
 
         // 401 бывает и на живой сессии — access живёт 2 часа. Один раз обновляемся

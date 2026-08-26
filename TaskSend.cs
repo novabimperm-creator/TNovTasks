@@ -253,6 +253,38 @@ namespace TNovTasks
                     {
                         proLine = "Задания появятся на сайте TNovPRO (принято: " + sendResult.Accepted + ").";
                         Logger.Log("TNovPRO: принято заданий " + sendResult.Accepted, 1);
+
+                        // 3D группы: получатель видит на сайте ТЕ САМЫЕ отверстия и то,
+                        // что вокруг них, не открывая Revit. Не собралось или не
+                        // залилось — пишем в лог и идём дальше: задание уже выдано,
+                        // ронять выдачу из-за картинки нельзя.
+                        int shipped3d = 0;
+                        foreach (Group group in groupsList)
+                        {
+                            string taskId;
+                            if (!sendResult.IdsByName.TryGetValue(group.Name ?? "", out taskId)) continue;
+
+                            var geo = TasksPro.ProGeometry.Export(doc, group.GetMemberIds());
+                            if (geo.Glb == null)
+                            {
+                                Logger.Log("TNovPRO: 3D группы «" + group.Name + "» не собрано — " + geo.Error, 3);
+                                continue;
+                            }
+
+                            string uploadError = TasksPro.ProApiSession.RunSync(
+                                () => proSession.UploadGeometryAsync(taskId, geo.Glb));
+                            if (uploadError == null)
+                            {
+                                shipped3d++;
+                                Logger.Log("TNovPRO: 3D группы «" + group.Name + "» отправлено ("
+                                    + geo.TriangleCount + " тр., окружение " + geo.NeighborCount + ")", 1);
+                            }
+                            else
+                            {
+                                Logger.Log("TNovPRO: 3D группы «" + group.Name + "» не залито — " + uploadError, 3);
+                            }
+                        }
+                        if (shipped3d > 0) proLine += " Группы можно посмотреть в 3D: " + shipped3d + ".";
                     }
                     else
                     {
