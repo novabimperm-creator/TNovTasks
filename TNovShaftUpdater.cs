@@ -112,15 +112,7 @@ namespace TNovTasks
                             TNovConfig config = TNovConfigLoad.LoadConfig();
                             string userName = app.Username;
                             string userDepartment = "-"; string userDepRole = "-";
-                            string[] rolesFile = File.ReadAllLines(config.ServerPath + "roles.txt");
-                            foreach (string role in rolesFile)
-                            {
-                                if (role.Contains(userName))
-                                {
-                                    string[] line = role.Split(','); userDepartment = line[1]; userDepRole = line[2]; break;
-                                }
-
-                            }
+                            TNovHoleUpdater.ResolveUserRole(config, userName, out userDepartment, out userDepRole);
                             
                             string prevValue = "0";
                             bool TNovTextParamExist = Param.ParamExistByGuid(NTNovTextparamGuid, elem);

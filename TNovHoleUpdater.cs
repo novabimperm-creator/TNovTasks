@@ -124,15 +124,7 @@ namespace TNovTasks
                                 TNovConfig config = TNovConfigLoad.LoadConfig();
                                 string userName = app.Username;
                                 string userDepartment = "-"; string userDepRole = "-";
-                                string[] rolesFile = File.ReadAllLines(config.ServerPath+"roles.txt");
-                                foreach (string role in rolesFile)
-                                {
-                                    if (role.Contains(userName))
-                                    {
-                                        string[] line = role.Split(','); userDepartment = line[1]; userDepRole = line[2]; break;
-                                    }
-
-                                }
+                                ResolveUserRole(config, userName, out userDepartment, out userDepRole);
                                 Guid widthParam = adskHoleWidthParamGuid; Guid heightParam = adskHoleHeightParamGuid;
                                 foreach (Parameter param in elem.ParametersMap) //круглые отв
                                 {
@@ -346,6 +338,74 @@ namespace TNovTasks
             }
 
             
+        }
+
+        internal static void ResolveUserRole(TNovConfig config, string revitUserName, out string userDepartment, out string userDepRole)
+        {
+            userDepartment = "-";
+            userDepRole = "-";
+            if (config == null || string.IsNullOrEmpty(config.ServerPath)) return;
+
+            string[] candidates = GetUserLoginCandidates(revitUserName);
+            string[] rolesFile = File.ReadAllLines(config.ServerPath + "roles.txt");
+            foreach (string role in rolesFile)
+            {
+                if (string.IsNullOrWhiteSpace(role)) continue;
+                string trimmed = role.Trim();
+                if (trimmed.StartsWith("::")) continue;
+
+                string[] line = trimmed.Split(',');
+                if (line.Length < 2) continue;
+
+                string login = line[0].Trim();
+                bool matched = false;
+                foreach (string candidate in candidates)
+                {
+                    if (UserLoginMatches(login, candidate)) { matched = true; break; }
+                }
+                if (!matched) continue;
+
+                userDepartment = line[1].Trim();
+                if (line.Length > 2) userDepRole = line[2].Trim();
+                break;
+            }
+        }
+
+        static string[] GetUserLoginCandidates(string revitUserName)
+        {
+            var names = new List<string>();
+            AddUserLoginCandidate(names, revitUserName);
+            AddUserLoginCandidate(names, Environment.UserName);
+            try { AddUserLoginCandidate(names, UserNameHelper.GetCurrentUserName(true)); } catch { }
+            return names.ToArray();
+        }
+
+        static void AddUserLoginCandidate(List<string> names, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return;
+            string name = value.Trim();
+            if (!names.Contains(name)) names.Add(name);
+
+            int slash = Math.Max(name.LastIndexOf('\\'), name.LastIndexOf('/'));
+            if (slash >= 0 && slash < name.Length - 1)
+            {
+                string afterSlash = name.Substring(slash + 1).Trim();
+                if (afterSlash.Length > 0 && !names.Contains(afterSlash)) names.Add(afterSlash);
+                name = afterSlash;
+            }
+
+            int at = name.IndexOf('@');
+            if (at > 0)
+            {
+                string beforeAt = name.Substring(0, at).Trim();
+                if (beforeAt.Length > 0 && !names.Contains(beforeAt)) names.Add(beforeAt);
+            }
+        }
+
+        static bool UserLoginMatches(string loginFromRoles, string userName)
+        {
+            if (string.IsNullOrWhiteSpace(loginFromRoles) || string.IsNullOrWhiteSpace(userName)) return false;
+            return string.Equals(loginFromRoles.Trim(), userName.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
         public string GetAdditionalInformation()
