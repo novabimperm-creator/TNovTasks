@@ -15,6 +15,8 @@ namespace TNovTasks
     [Transaction(TransactionMode.Manual)]
     public class TNovShaftUpdater : IUpdater
     {
+        private const string UpdaterName = "TNovShaftUpdater";
+
         static AddInId _appId;
         static UpdaterId _updaterId;
 
@@ -26,9 +28,29 @@ namespace TNovTasks
                                                    "d1915654-7bc0-4643-a03f-4165ef111810"));
         }
 
+        /// <summary>
+        /// Точка входа Revit. Наружу не должно вылетать ни одного исключения:
+        /// любое исключение из IUpdater.Execute Revit показывает пользователю
+        /// с предложением отключить обновитель.
+        /// </summary>
         public void Execute(UpdaterData data)
         {
+            try
+            {
+                ExecuteCore(data);
+            }
+            catch (Exception ex)
+            {
+                UpdaterDiagnostics.Report(UpdaterName, "Execute", ex);
+            }
+        }
+
+        private void ExecuteCore(UpdaterData data)
+        {
+            if (data == null) return;
+
             Document doc = data.GetDocument();
+            if (doc == null || doc.IsFamilyDocument) return;
             Autodesk.Revit.ApplicationServices.Application app = doc.Application;
 
             //параметры
@@ -43,33 +65,39 @@ namespace TNovTasks
             Guid adskLengthParamGuid = new Guid("748a2515-4cc9-4b74-9a69-339a8d65a212");//ADSK_Размер_Длина
 
             //проверка имени файла
-            string docName = doc.Title.ToString();
+            string docName = doc.Title ?? "";
             bool taskModel = false; if (docName.Contains("Задани") || docName.Contains("задани") || docName.Contains("-ЗД") || docName.Contains("_ЗД") || docName.Contains("ЗАДАНИЕ")) taskModel = true;
 
-            if (taskModel) 
+            if (taskModel)
             {
-                
-                    List<ElementId> idsA = data.GetAddedElementIds().ToList();
-                    List<ElementId> idsM = data.GetModifiedElementIds().ToList();
+
+                    var allIds = new HashSet<ElementId>();
+                    ICollection<ElementId> idsA = data.GetAddedElementIds();
+                    if (idsA != null) allIds.UnionWith(idsA);
+                    ICollection<ElementId> idsM = data.GetModifiedElementIds();
+                    if (idsM != null) allIds.UnionWith(idsM);
+                    if (allIds.Count == 0) return;
+
                     List<ElementId> ids = new List<ElementId>();
 
                     ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Рама под оборудование"));
                     ElementFilter elementFilter2 = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Задание на шахту"));
                     ElementFilter elementFilter3 = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Задание на приямок"));
 
-                    foreach (var id in idsA)
+                    foreach (var id in allIds)
                     {
-                        Element elem = doc.GetElement(id);
-                        if (elementFilter.PassesFilter(elem)) ids.Add(id);
-                        else if (elementFilter2.PassesFilter(elem)) ids.Add(id);
-                        else if (elementFilter3.PassesFilter(elem)) ids.Add(id);
-                    }
-                    foreach (var id in idsM)
-                    {
-                        Element elem = doc.GetElement(id);
-                        if (elementFilter.PassesFilter(elem)) ids.Add(id);
-                        else if (elementFilter2.PassesFilter(elem)) ids.Add(id);
-                        else if (elementFilter3.PassesFilter(elem)) ids.Add(id);
+                        try
+                        {
+                            Element elem = doc.GetElement(id);
+                            if (elem == null) continue;
+                            if (elementFilter.PassesFilter(elem)) ids.Add(id);
+                            else if (elementFilter2.PassesFilter(elem)) ids.Add(id);
+                            else if (elementFilter3.PassesFilter(elem)) ids.Add(id);
+                        }
+                        catch (Exception ex)
+                        {
+                            UpdaterDiagnostics.Report(UpdaterName, "фильтр, элемент " + UpdaterUtils.IdText(id), ex);
+                        }
                     }
 
                     
@@ -80,6 +108,8 @@ namespace TNovTasks
                         Element elem = doc.GetElement(id);
                         if (null != elem)
                         {
+                            try
+                            {
                             //заполнение группирования
                             if (RevitApiCompat.ElementIdIntValue(elem.GroupId) != -1) //отверстие - в группе
                             {
@@ -108,12 +138,9 @@ namespace TNovTasks
                                 }
                             }
 
-                            //имя и роль пользователя
-                            TNovConfig config = TNovConfigLoad.LoadConfig();
-                            string userName = app.Username;
-                            string userDepartment = "-"; string userDepRole = "-";
-                            TNovHoleUpdater.ResolveUserRole(config, userName, out userDepartment, out userDepRole);
-                            
+                            //имя и роль пользователя (роль читается с сервера, поэтому кэшируется)
+                            string userDepartment = TNovHoleUpdater.GetUserDepartment(app);
+
                             string prevValue = "0";
                             bool TNovTextParamExist = Param.ParamExistByGuid(NTNovTextparamGuid, elem);
                             if(TNovTextParamExist) { try { prevValue = elem.get_Parameter(NTNovTextparamGuid).AsValueString(); } catch (Exception) { } }
@@ -296,6 +323,12 @@ namespace TNovTasks
 
 
                             
+                            }
+                            catch (Exception ex)
+                            {
+                                // Сбой на одном элементе не должен ронять обработку остальных
+                                UpdaterDiagnostics.Report(UpdaterName, "элемент " + UpdaterUtils.IdText(id), ex);
+                            }
                         }
 
                     }
@@ -323,7 +356,7 @@ namespace TNovTasks
 
         public string GetUpdaterName()
         {
-            return "TNovShaftUpdater";
+            return UpdaterName;
         }
     }
 }

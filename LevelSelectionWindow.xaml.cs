@@ -36,11 +36,7 @@ namespace TNovTasks
 
         private void HelpButton_Click(object sender, RoutedEventArgs e)
         {
-            string commandText = HelpLinks.GetHelpLink("Отметки Вырезание");
-            var proc = new System.Diagnostics.Process();
-            proc.StartInfo.FileName = commandText;
-            proc.StartInfo.UseShellExecute = true;
-            proc.Start();
+            HelpLinks.ShowHelp("Отметки Вырезание");
         }
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)

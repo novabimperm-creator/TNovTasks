@@ -15,6 +15,8 @@ namespace TNovTasks
     [Transaction(TransactionMode.Manual)]
     public class TNovTaskUpdater : IUpdater
     {
+        private const string UpdaterName = "TNovTaskUpdater";
+
         static AddInId _appId;
         static UpdaterId _updaterId;
 
@@ -26,87 +28,84 @@ namespace TNovTasks
                                                    "9d5b2399-c4a4-457b-9306-63a64aca0c02"));
         }
 
+        /// <summary>
+        /// Точка входа Revit. Наружу не должно вылетать ни одного исключения:
+        /// любое исключение из IUpdater.Execute Revit показывает пользователю
+        /// с предложением отключить обновитель.
+        /// </summary>
         public void Execute(UpdaterData data)
         {
+            try
+            {
+                ExecuteCore(data);
+            }
+            catch (Exception ex)
+            {
+                UpdaterDiagnostics.Report(UpdaterName, "Execute", ex);
+            }
+        }
+
+        private void ExecuteCore(UpdaterData data)
+        {
+            if (data == null) return;
+
             Document doc = data.GetDocument();
-            Autodesk.Revit.ApplicationServices.Application app = doc.Application;
+            if (doc == null || doc.IsFamilyDocument) return;
 
             //параметры
-            ElementId familyNameParamId = new ElementId(-1002002); //id параметра Имя семейства
             Guid adskGparamGuid = new Guid("3de5f1a4-d560-4fa8-a74f-25d250fb3401");//ADSK_Группирование
 
             //проверка имени файла
-            string docName = doc.Title.ToString();
-            bool taskModel = false; if (docName.Contains("Задани") || docName.Contains("задани") || docName.Contains("-ЗД") || docName.Contains("_ЗД") || docName.Contains("ЗАДАНИЕ")) taskModel = true;
+            string docName = doc.Title ?? "";
+            bool taskModel = docName.Contains("Задани") || docName.Contains("задани")
+                || docName.Contains("-ЗД") || docName.Contains("_ЗД") || docName.Contains("ЗАДАНИЕ");
+            if (!taskModel) return;
 
-            if (taskModel) 
+            var ids = new HashSet<ElementId>();
+            ICollection<ElementId> idsA = data.GetAddedElementIds();
+            if (idsA != null) ids.UnionWith(idsA);
+            ICollection<ElementId> idsM = data.GetModifiedElementIds();
+            if (idsM != null) ids.UnionWith(idsM);
+
+            foreach (ElementId id in ids)
             {
-                
-                    List<ElementId> idsA = data.GetAddedElementIds().ToList();
-                    List<ElementId> idsM = data.GetModifiedElementIds().ToList();
-                    List<ElementId> ids = new List<ElementId>();
+                // Сбой на одном элементе не должен ронять обработку остальных
+                try
+                {
+                    Element elem = doc.GetElement(id);
+                    if (null == elem) continue;
 
-                    
-                    foreach (var id in idsA)
+                    string name = ElementName(elem);
+                    if (name.Length == 0) continue;
+
+                    string adskGvalue = "";
+                    if (name.Contains("КЖ"))
                     {
-                        Element elem = doc.GetElement(id);
-                        ids.Add(id);
+                        if (name.Contains("Стены") || name.Contains("стены")) adskGvalue = "КЖ.Стены";
+                        else if (name.Contains("Плиты") || name.Contains("плиты")) adskGvalue = "КЖ.Плиты";
                     }
-                    foreach (var id in idsM)
+                    else if (name.Contains("КР"))
                     {
-                        Element elem = doc.GetElement(id);
-                        ids.Add(id);
+                        if (name.Contains("Стены") || name.Contains("стены")) adskGvalue = "КР.Стены";
                     }
+                    if (name.Contains("Шахты")) adskGvalue = "КР.Шахты";
+                    if (name.Contains("Рамы")) adskGvalue = "КР.Рамы";
+                    if (name.Contains("Приямки")) adskGvalue = "КЖ.Приямки";
 
-                    foreach (ElementId id in ids)
-                    {
-                        Element elem = doc.GetElement(id);
-                        if (null != elem)
-                        {
-                            try
-                            {
-                                string adskGvalue = "";
-                                if (elem.Name.Contains("КЖ"))
-                                {
-                                    if (elem.Name.Contains("Стены") || elem.Name.Contains("стены")) adskGvalue = "КЖ.Стены";
-                                    else if (elem.Name.Contains("Плиты") || elem.Name.Contains("плиты")) adskGvalue = "КЖ.Плиты";
-                                }
-                                else if (elem.Name.Contains("КР"))
-                                {
-                                    if (elem.Name.Contains("Стены") || elem.Name.Contains("стены")) adskGvalue = "КР.Стены";
-                                }
-                                if (elem.Name.Contains("Шахты")) adskGvalue = "КР.Шахты";
-                                if (elem.Name.Contains("Рамы")) adskGvalue = "КР.Рамы";
-                                if (elem.Name.Contains("Приямки")) adskGvalue = "КЖ.Приямки";
-
-                                if (adskGvalue.Length > 0 && elem.get_Parameter(adskGparamGuid).IsReadOnly != true)
-                                {
-                                    elem.get_Parameter(adskGparamGuid)?.Set(adskGvalue);
-                                }
-                                /*
-                                string[] nameParts = elem.Name.Split('_');
-                                string shortName = elem.Name;
-                                if (nameParts.Length < 3)
-                                { 
-                                    new InfoWindow280("Некорректное имя группы " + elem.Name + " - необходимо наличие блоков ОтКого_Кому_Этаж.").ShowDialog();
-                                    string commandText = @"https://portal.talan.elem/knowledge/proektirovanie/MEPtasks/";
-                                    var proc = new System.Diagnostics.Process();
-                                    proc.StartInfo.FileName = commandText;
-                                    proc.StartInfo.UseShellExecute = true;
-                                    proc.Start();
-                                }
-                                */
-                            }
-                            catch (Exception) { }
-
-                        }
-
-                    }
-                    
-                
+                    if (adskGvalue.Length > 0) //ADSK_Группирование
+                        UpdaterUtils.TrySetString(UpdaterUtils.GetWritableParam(elem, adskGparamGuid), adskGvalue);
+                }
+                catch (Exception ex)
+                {
+                    UpdaterDiagnostics.Report(UpdaterName, "элемент " + UpdaterUtils.IdText(id), ex);
+                }
             }
+        }
 
-            
+        private static string ElementName(Element elem)
+        {
+            try { return elem.Name ?? ""; }
+            catch { return ""; }
         }
 
         public string GetAdditionalInformation()
@@ -126,7 +125,7 @@ namespace TNovTasks
 
         public string GetUpdaterName()
         {
-            return "TNovTaskUpdater";
+            return UpdaterName;
         }
     }
 }

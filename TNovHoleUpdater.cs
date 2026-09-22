@@ -15,6 +15,13 @@ namespace TNovTasks
     [Transaction(TransactionMode.Manual)]
     public class TNovHoleUpdater : IUpdater
     {
+        private const string UpdaterName = "TNovHoleUpdater";
+
+        /// <summary>Как часто перечитывать роль пользователя с сервера.</summary>
+        static readonly TimeSpan RoleCheckInterval = TimeSpan.FromMinutes(5);
+        static DateTime _roleCheckedUtc = DateTime.MinValue;
+        static string _userDepartment = "-";
+
         static AddInId _appId;
         static UpdaterId _updaterId;
 
@@ -37,9 +44,29 @@ namespace TNovTasks
         Guid NTaskApprovedSTParamGuid = new Guid("7cb33aa5-8106-4e4c-8038-6691e34f438c");//N_Согласовано КР
         //04.2026: параметр N_Согласовано рук исключен как устаревший, для совместимости заполняется как "1"
 
+        /// <summary>
+        /// Точка входа Revit. Наружу не должно вылетать ни одного исключения:
+        /// любое исключение из IUpdater.Execute Revit показывает пользователю
+        /// с предложением отключить обновитель.
+        /// </summary>
         public void Execute(UpdaterData data)
         {
+            try
+            {
+                ExecuteCore(data);
+            }
+            catch (Exception ex)
+            {
+                UpdaterDiagnostics.Report(UpdaterName, "Execute", ex);
+            }
+        }
+
+        private void ExecuteCore(UpdaterData data)
+        {
+            if (data == null) return;
+
             Document doc = data.GetDocument();
+            if (doc == null || doc.IsFamilyDocument) return;
             Autodesk.Revit.ApplicationServices.Application app = doc.Application;
 
             //параметры
@@ -47,26 +74,33 @@ namespace TNovTasks
 
 
             //проверка имени файла
-            string docName = doc.Title.ToString();
+            string docName = doc.Title ?? "";
             bool taskModel = false; if (docName.Contains("Задани") || docName.Contains("задани") || docName.Contains("-ЗД") || docName.Contains("_ЗД") || docName.Contains("ЗАДАНИЕ")) taskModel = true;
 
-            List<ElementId> idsA = data.GetAddedElementIds().ToList();
-            List<ElementId> idsM = data.GetModifiedElementIds().ToList();
+            var allIds = new HashSet<ElementId>();
+            ICollection<ElementId> idsA = data.GetAddedElementIds();
+            if (idsA != null) allIds.UnionWith(idsA);
+            ICollection<ElementId> idsM = data.GetModifiedElementIds();
+            if (idsM != null) allIds.UnionWith(idsM);
+            if (allIds.Count == 0) return;
+
             List<ElementId> ids = new List<ElementId>();
 
             ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(familyNameParamId, "pmN.Отверстие"));
 
-
-            foreach (var id in idsA)
+            foreach (var id in allIds)
             {
-                Element elem = doc.GetElement(id);
-                if (elementFilter.PassesFilter(elem)) ids.Add(id);
+                try
+                {
+                    Element elem = doc.GetElement(id);
+                    if (elem != null && elementFilter.PassesFilter(elem)) ids.Add(id);
+                }
+                catch (Exception ex)
+                {
+                    UpdaterDiagnostics.Report(UpdaterName, "фильтр, элемент " + UpdaterUtils.IdText(id), ex);
+                }
             }
-            foreach (var id in idsM)
-            {
-                Element elem = doc.GetElement(id);
-                if (elementFilter.PassesFilter(elem)) ids.Add(id);
-            }
+            if (ids.Count == 0) return;
 
             foreach (ElementId id in ids) //заполнение отметки
             {
@@ -120,14 +154,12 @@ namespace TNovTasks
 
                                 //система отслеживания
 
-                                //имя и роль пользователя
-                                TNovConfig config = TNovConfigLoad.LoadConfig();
-                                string userName = app.Username;
-                                string userDepartment = "-"; string userDepRole = "-";
-                                ResolveUserRole(config, userName, out userDepartment, out userDepRole);
+                                //имя и роль пользователя (роль читается с сервера, поэтому кэшируется)
+                                string userDepartment = GetUserDepartment(app);
                                 Guid widthParam = adskHoleWidthParamGuid; Guid heightParam = adskHoleHeightParamGuid;
                                 foreach (Parameter param in elem.ParametersMap) //круглые отв
                                 {
+                                    if (param == null || param.Definition == null) continue;
                                     string paramName = param.Definition.Name;
                                     if (paramName == "ADSK_Размер_Диаметр") { widthParam = adskDiamParamGuid; heightParam = adskDiamParamGuid; }
                                 }
@@ -340,14 +372,43 @@ namespace TNovTasks
             
         }
 
+        /// <summary>
+        /// Подразделение пользователя. Читается с сервера (roles.txt), поэтому результат
+        /// кэшируется: обновитель вызывается на каждый элемент каждой транзакции,
+        /// а обращение к сетевой папке на каждый элемент подвешивает Revit.
+        /// </summary>
+        internal static string GetUserDepartment(Autodesk.Revit.ApplicationServices.Application app)
+        {
+            DateTime nowUtc = DateTime.UtcNow;
+            if (nowUtc - _roleCheckedUtc < RoleCheckInterval) return _userDepartment;
+            _roleCheckedUtc = nowUtc;
+
+            try
+            {
+                TNovConfig config = TNovConfigLoad.LoadConfig();
+                string userName = app == null ? null : app.Username;
+                string department, role;
+                ResolveUserRole(config, userName, out department, out role);
+                _userDepartment = department;
+            }
+            catch
+            {
+                _userDepartment = "-";
+            }
+            return _userDepartment;
+        }
+
         internal static void ResolveUserRole(TNovConfig config, string revitUserName, out string userDepartment, out string userDepRole)
         {
             userDepartment = "-";
             userDepRole = "-";
             if (config == null || string.IsNullOrEmpty(config.ServerPath)) return;
 
+            string rolesPath = config.ServerPath + "roles.txt";
+            if (!File.Exists(rolesPath)) return;
+
             string[] candidates = GetUserLoginCandidates(revitUserName);
-            string[] rolesFile = File.ReadAllLines(config.ServerPath + "roles.txt");
+            string[] rolesFile = File.ReadAllLines(rolesPath);
             foreach (string role in rolesFile)
             {
                 if (string.IsNullOrWhiteSpace(role)) continue;
@@ -425,7 +486,7 @@ namespace TNovTasks
 
         public string GetUpdaterName()
         {
-            return "TNovHoleUpdater";
+            return UpdaterName;
         }
     }
 }
