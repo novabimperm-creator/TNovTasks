@@ -404,11 +404,11 @@ namespace TNovTasks
             userDepRole = "-";
             if (config == null || string.IsNullOrEmpty(config.ServerPath)) return;
 
-            string rolesPath = config.ServerPath + "roles.txt";
-            if (!File.Exists(rolesPath)) return;
+            string[] rolesFile;
+            try { rolesFile = TNovCommon.Server.ServerData.ReadAllLinesAbsolute(config.ServerPath + "roles.txt"); }
+            catch (Exception) { return; }
 
             string[] candidates = GetUserLoginCandidates(revitUserName);
-            string[] rolesFile = File.ReadAllLines(rolesPath);
             foreach (string role in rolesFile)
             {
                 if (string.IsNullOrWhiteSpace(role)) continue;

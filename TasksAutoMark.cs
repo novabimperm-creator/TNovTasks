@@ -105,7 +105,7 @@ namespace TNovTasks
 
             //имя и роль пользователя
             string userDepartment = "-";
-            string[] rolesFile = File.ReadAllLines(config.ServerPath+"roles.txt");
+            string[] rolesFile = TNovCommon.Server.ServerData.ReadAllLines("roles.txt");
             foreach (string role in rolesFile)
             {
                 if (role.Contains(userName))
