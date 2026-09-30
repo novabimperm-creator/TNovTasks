@@ -208,6 +208,49 @@ namespace TNovTasks.TasksPro
             catch (Exception ex) { return ex.Message; }
         }
 
+        /// <summary>
+        /// Сотрудники платформы для выбора ответственного. Заблокированных и
+        /// удалённых отбрасываем — сервер их всё равно не назначит.
+        /// </summary>
+        public async Task<List<ProUser>> GetUsersAsync()
+        {
+            using (var resp = await SendWithRetryAsync(() => Make(HttpMethod.Get, "api/users")))
+            {
+                string text = resp.Content != null ? await resp.Content.ReadAsStringAsync() : "";
+                if (!resp.IsSuccessStatusCode)
+                    throw new InvalidOperationException("HTTP " + (int)resp.StatusCode + " " + Cut(text, 300));
+
+                var all = ProJson.Deserialize<List<ProUser>>(text) ?? new List<ProUser>();
+                return all.FindAll(u => u != null && !u.IsBlocked && !u.IsDeleted && !string.IsNullOrEmpty(u.Id));
+            }
+        }
+
+        /// <summary>
+        /// Назначить ответственного за задание. Сервер сам проверит сотрудника,
+        /// добавит его руководителей и разошлёт уведомления. Ошибку возвращаем
+        /// текстом: задание уже выдано, и падать из-за назначения нельзя.
+        /// </summary>
+        public async Task<string> SetAssigneeAsync(string taskId, string userId)
+        {
+            if (string.IsNullOrEmpty(taskId) || string.IsNullOrEmpty(userId)) return "некого назначать";
+            try
+            {
+                var body = new { assignee = userId };
+                using (var resp = await SendWithRetryAsync(
+                    () => Make(HttpMethod.Post, "api/tasks/" + taskId + "/assignee", body)))
+                {
+                    if (resp.IsSuccessStatusCode) return null;
+                    string text = resp.Content != null ? await resp.Content.ReadAsStringAsync() : "";
+                    string code = null;
+                    try { code = (string)JObject.Parse(text)["code"]; } catch { /* не json */ }
+                    if (code == "ASSIGNEE_INVALID")
+                        return "сотрудник не найден или заблокирован в TNovPRO";
+                    return "HTTP " + (int)resp.StatusCode + " " + Cut(text, 300);
+                }
+            }
+            catch (Exception ex) { return ex.Message; }
+        }
+
         // 401 бывает и на живой сессии — access живёт 2 часа. Один раз обновляемся
         // и повторяем; запрос создаём заново, отправленный HttpRequestMessage
         // переиспользовать нельзя.

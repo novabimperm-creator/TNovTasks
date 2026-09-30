@@ -46,9 +46,13 @@ namespace TNovTasks
         public string MEPCommentsHistory { get; set; }
         [JsonIgnore]
         public string NewComment { get; set; }
+        /// <summary>Ответственный в TNovPRO (userId), выбранный при выдаче; null — не менять.</summary>
+        [JsonIgnore]
+        public string AssigneeId { get; set; }
 
         /// <summary>
-        /// Добавляет запись о комментарии для следующей версии (текущая TaskVersion + 1).
+        /// Добавляет запись о комментарии к версии. TaskVersion к этому моменту уже
+        /// поднята до выдаваемой.
         /// </summary>
         public void AppendVersionComment(string comment)
         {

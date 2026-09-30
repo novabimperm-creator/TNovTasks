@@ -200,13 +200,30 @@ namespace TNovTasks
             #endregion
 
             #region Диалог (ввод комментариев)
-            var commentsWindow = new CommentsWindow280(itemsForComments);
+            // Сотрудники TNovPRO для выбора ответственного. Не загрузились — задание
+            // всё равно выдаём, просто без назначения.
+            List<TasksPro.ProUser> proUsers = null;
+            if (useTNovPRO && proSession != null)
+            {
+                try
+                {
+                    proUsers = TasksPro.ProApiSession.RunSync(() => proSession.GetUsersAsync());
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log("TNovPRO: список сотрудников не загружен — " + ex.Message, 3);
+                }
+            }
+
+            var commentsWindow = new CommentsWindow280(itemsForComments, proUsers, useTNovPRO);
             bool? result = commentsWindow.ShowDialog();
             if (result != true)
             {
                 Logger.Log("Отменено. Завершение работы", 3);
                 return Result.Cancelled;
             }
+            foreach (var row in commentsWindow.Rows)
+                row.Item.AssigneeId = row.AssigneeId;
             #endregion
 
             List<object> proItems = new List<object>();
@@ -285,6 +302,37 @@ namespace TNovTasks
                             }
                         }
                         if (shipped3d > 0) proLine += " Группы можно посмотреть в 3D: " + shipped3d + ".";
+
+                        // Ответственные: POST api/tasks их не принимает, назначаем
+                        // отдельно по каждому заданию. Пустой — не трогаем: на сайте
+                        // остаётся прежний ответственный.
+                        int assigned = 0, assignFailed = 0;
+                        foreach (var item in itemsForComments)
+                        {
+                            if (string.IsNullOrEmpty(item.AssigneeId)) continue;
+                            string taskId;
+                            if (!sendResult.IdsByName.TryGetValue(item.HoleGroupName ?? "", out taskId))
+                            {
+                                assignFailed++;
+                                Logger.Log("TNovPRO: ответственный для «" + item.HoleGroupName + "» не назначен — задание не найдено в ответе", 3);
+                                continue;
+                            }
+
+                            string assignError = TasksPro.ProApiSession.RunSync(
+                                () => proSession.SetAssigneeAsync(taskId, item.AssigneeId));
+                            if (assignError == null)
+                            {
+                                assigned++;
+                                Logger.Log("TNovPRO: ответственный для «" + item.HoleGroupName + "» назначен", 1);
+                            }
+                            else
+                            {
+                                assignFailed++;
+                                Logger.Log("TNovPRO: ответственный для «" + item.HoleGroupName + "» не назначен — " + assignError, 3);
+                            }
+                        }
+                        if (assigned > 0) proLine += " Назначено ответственных: " + assigned + ".";
+                        if (assignFailed > 0) proLine += " Не удалось назначить ответственных: " + assignFailed + ".";
                     }
                     else
                     {
