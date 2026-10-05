@@ -256,9 +256,16 @@ namespace TNovTasks
 
             return groups1;
         }
+        const double ToleranceMm = 20; //допуск при сравнении отверстий, мм
+        //сравнение размеров (значения в мм)
         public static bool CompareWithTolerance(double a, double b)
         {
-            return Math.Abs(a - b) <= 0.02;
+            return Math.Abs(a - b) <= ToleranceMm + 1e-6; //запас на погрешность double
+        }
+        //сравнение координат (значения в м)
+        public static bool CompareCoordWithTolerance(double a, double b)
+        {
+            return CompareWithTolerance(a * 1000, b * 1000);
         }
         public static List<Hole> HolesInGroup(in Document linkDoc, in Document doc, in string groupName, in bool writeLogs)
         {
@@ -460,9 +467,9 @@ namespace TNovTasks
                                             XYZ point = elem_lp.Point; //XYZ point1 = transform.OfPoint(point);
                                             double elem_x = point.X * 0.3048; double elem_y = point.Y * 0.3048; double elem_z = point.Z * 0.3048;
                                             elem_x = Math.Round(elem_x, 3); elem_y = Math.Round(elem_y, 3); elem_z = Math.Round(elem_z, 3);
-                                            if (CompareWithTolerance(linkElem_x, elem_x) == false) linkElem_status += "X: " + elem_x.ToString() + ". ";
-                                            if (CompareWithTolerance(linkElem_y, elem_y) == false) linkElem_status += "Y: " + elem_y.ToString() + ". ";
-                                            if (CompareWithTolerance(linkElem_z, elem_z) == false) linkElem_status += "Z: " + elem_z.ToString() + ". ";
+                                            if (CompareCoordWithTolerance(linkElem_x, elem_x) == false) linkElem_status += "X: " + elem_x.ToString() + ". ";
+                                            if (CompareCoordWithTolerance(linkElem_y, elem_y) == false) linkElem_status += "Y: " + elem_y.ToString() + ". ";
+                                            if (CompareCoordWithTolerance(linkElem_z, elem_z) == false) linkElem_status += "Z: " + elem_z.ToString() + ". ";
 
                                             if (writeLogs) Logger.Log("      " + "X: " + elem_x.ToString() + "; Y: " + elem_y.ToString() + "; Z: " +
                                                 elem_z.ToString() + "; исходное: " + "X: " + linkElem_x.ToString() + "; Y: " + linkElem_y.ToString() + "; Z: " + linkElem_z.ToString(), 2);
@@ -514,18 +521,13 @@ namespace TNovTasks
                                                     }
 
                                                     LocationPoint elem_lp = (LocationPoint)elem.Location;
-                                                    XYZ point = elem_lp.Point;
-
-                                                    foreach (var link in taskLinks)
-                                                    {
-                                                        var transform = link.GetTransform(); point = transform.OfPoint(point); break;
-                                                    }
+                                                    XYZ point = elem_lp.Point; //элемент текущей модели - уже в ее координатах, трансформация связи не нужна
 
                                                     double elem_x = point.X * 0.3048; double elem_y = point.Y * 0.3048; double elem_z = point.Z * 0.3048;
                                                     elem_x = Math.Round(elem_x, 3); elem_y = Math.Round(elem_y, 3); elem_z = Math.Round(elem_z, 3);
-                                                    if (CompareWithTolerance(linkElem_x, elem_x) == false) linkElem_status += "X: " + elem_x.ToString() + ". ";
-                                                    if (CompareWithTolerance(linkElem_y, elem_y) == false) linkElem_status += "Y: " + elem_y.ToString() + ". ";
-                                                    if (CompareWithTolerance(linkElem_z, elem_z) == false) linkElem_status += "Z: " + elem_z.ToString() + ". ";
+                                                    if (CompareCoordWithTolerance(linkElem_x, elem_x) == false) linkElem_status += "X: " + elem_x.ToString() + ". ";
+                                                    if (CompareCoordWithTolerance(linkElem_y, elem_y) == false) linkElem_status += "Y: " + elem_y.ToString() + ". ";
+                                                    if (CompareCoordWithTolerance(linkElem_z, elem_z) == false) linkElem_status += "Z: " + elem_z.ToString() + ". ";
 
                                                     if (writeLogs) Logger.Log("   удаляем из списка на удаление", 2);
                                                     groupElemsToDelete.Remove(elem.Id);
@@ -651,9 +653,9 @@ namespace TNovTasks
                                             XYZ point = elem_lp.Point; //XYZ point1 = transform.OfPoint(point);
                                             double elem_x = point.X * 0.3048; double elem_y = point.Y * 0.3048; double elem_z = point.Z * 0.3048;
                                             elem_x = Math.Round(elem_x, 3); elem_y = Math.Round(elem_y, 3); elem_z = Math.Round(elem_z, 3);
-                                            if (CompareWithTolerance(linkElem_x, elem_x) == false) linkElem_status += "X: " + elem_x.ToString() + ". ";
-                                            if (CompareWithTolerance(linkElem_y, elem_y) == false) linkElem_status += "Y: " + elem_y.ToString() + ". ";
-                                            if (CompareWithTolerance(linkElem_z, elem_z) == false) linkElem_status += "Z: " + elem_z.ToString() + ". ";
+                                            if (CompareCoordWithTolerance(linkElem_x, elem_x) == false) linkElem_status += "X: " + elem_x.ToString() + ". ";
+                                            if (CompareCoordWithTolerance(linkElem_y, elem_y) == false) linkElem_status += "Y: " + elem_y.ToString() + ". ";
+                                            if (CompareCoordWithTolerance(linkElem_z, elem_z) == false) linkElem_status += "Z: " + elem_z.ToString() + ". ";
 
                                             if (writeLogs) Logger.Log("      " + "X: " + elem_x.ToString() + "; Y: " + elem_y.ToString() + "; Z: " + elem_z.ToString() + "; исходное: " +
                                                 "X: " + linkElem_x.ToString() + "; Y: " + linkElem_y.ToString() + "; Z: " + linkElem_z.ToString(), 2);
@@ -705,18 +707,13 @@ namespace TNovTasks
                                                     if (CompareWithTolerance(elem_height, linkElem_height) == false) linkElem_status += "Высота: " + elem_height.ToString() + ". ";
 
                                                     LocationPoint elem_lp = (LocationPoint)elem.Location;
-                                                    XYZ point = elem_lp.Point;
-
-                                                    foreach (var link in taskLinks)
-                                                    {
-                                                        var transform = link.GetTransform(); point = transform.OfPoint(point); break;
-                                                    }
+                                                    XYZ point = elem_lp.Point; //элемент текущей модели - уже в ее координатах, трансформация связи не нужна
 
                                                     double elem_x = point.X * 0.3048; double elem_y = point.Y * 0.3048; double elem_z = point.Z * 0.3048;
                                                     elem_x = Math.Round(elem_x, 3); elem_y = Math.Round(elem_y, 3); elem_z = Math.Round(elem_z, 3);
-                                                    if (CompareWithTolerance(linkElem_x, elem_x) == false) linkElem_status += "X: " + elem_x.ToString() + ". ";
-                                                    if (CompareWithTolerance(linkElem_y, elem_y) == false) linkElem_status += "Y: " + elem_y.ToString() + ". ";
-                                                    if (CompareWithTolerance(linkElem_z, elem_z) == false) linkElem_status += "Z: " + elem_z.ToString() + ". ";
+                                                    if (CompareCoordWithTolerance(linkElem_x, elem_x) == false) linkElem_status += "X: " + elem_x.ToString() + ". ";
+                                                    if (CompareCoordWithTolerance(linkElem_y, elem_y) == false) linkElem_status += "Y: " + elem_y.ToString() + ". ";
+                                                    if (CompareCoordWithTolerance(linkElem_z, elem_z) == false) linkElem_status += "Z: " + elem_z.ToString() + ". ";
 
                                                     if (writeLogs) Logger.Log("   удаляем из списка на удаление", 2);
                                                     groupElemsToDelete2.Remove(elem.Id);
