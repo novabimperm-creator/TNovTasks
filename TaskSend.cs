@@ -36,11 +36,6 @@ namespace TNovTasks
 
             TNovConfig config = TNovConfigLoad.LoadConfig(DBCommandName, TNovVersion);
 
-            bool useTNovPRO = false;
-            if (config.CorpName == "ООО ПМ Новация") useTNovPRO = true;
-
-
-
             if (docName.Contains("Задани") || docName.Contains("задани") || docName.Contains("-ЗД") || docName.Contains("_ЗД") || docName.Contains("ЗАДАНИЕ")) { }
             else
             {
@@ -71,32 +66,29 @@ namespace TNovTasks
             #endregion
 
             #region Авторизация в TNovPRO
-            // Только для пермской конфигурации (useTNovPRO выше): в остальных
-            // сборках выдача заданий работает по-прежнему, через JSON на сервере.
+            // Обязательна при любой конфигурации TNovConfig: задание пишется и в
+            // JSON на сервере, и в TNovPRO.
             // Вход — через браузер, как в TNovUtils/Issues; сессия живёт между
             // нажатиями кнопки, поэтому обычно ничего не открывается вовсе.
             TasksPro.ProApiSession proSession = null;
-            if (useTNovPRO)
+            bool proAuthorized = false;
+            try
             {
-                bool proAuthorized = false;
-                try
-                {
-                    proSession = TasksPro.ProApiSession.Instance;
-                    proAuthorized = TasksPro.ProApiSession.RunSync(() => proSession.EnsureAuthAsync());
-                }
-                catch (Exception ex)
-                {
-                    Logger.Log("TNovPRO: ошибка входа — " + ex.Message, 4);
-                }
-
-                if (!proAuthorized)
-                {
-                    new InfoWindow280("Авторизуйтесь в TNovPRO для возможности выдать задание!").ShowDialog();
-                    Logger.Log("Нет авторизации в TNovPRO. Завершение работы", 4);
-                    return Result.Failed;
-                }
-                Logger.Log("TNovPRO: сессия готова", 1);
+                proSession = TasksPro.ProApiSession.Instance;
+                proAuthorized = TasksPro.ProApiSession.RunSync(() => proSession.EnsureAuthAsync());
             }
+            catch (Exception ex)
+            {
+                Logger.Log("TNovPRO: ошибка входа — " + ex.Message, 4);
+            }
+
+            if (!proAuthorized)
+            {
+                new InfoWindow280("Авторизуйтесь в TNovPRO для возможности выдать задание!").ShowDialog();
+                Logger.Log("Нет авторизации в TNovPRO. Завершение работы", 4);
+                return Result.Failed;
+            }
+            Logger.Log("TNovPRO: сессия готова", 1);
             #endregion
 
             #region Выборка
@@ -203,19 +195,16 @@ namespace TNovTasks
             // Сотрудники TNovPRO для выбора ответственного. Не загрузились — задание
             // всё равно выдаём, просто без назначения.
             List<TasksPro.ProUser> proUsers = null;
-            if (useTNovPRO && proSession != null)
+            try
             {
-                try
-                {
-                    proUsers = TasksPro.ProApiSession.RunSync(() => proSession.GetUsersAsync());
-                }
-                catch (Exception ex)
-                {
-                    Logger.Log("TNovPRO: список сотрудников не загружен — " + ex.Message, 3);
-                }
+                proUsers = TasksPro.ProApiSession.RunSync(() => proSession.GetUsersAsync());
+            }
+            catch (Exception ex)
+            {
+                Logger.Log("TNovPRO: список сотрудников не загружен — " + ex.Message, 3);
             }
 
-            var commentsWindow = new CommentsWindow280(itemsForComments, proUsers, useTNovPRO);
+            var commentsWindow = new CommentsWindow280(itemsForComments, proUsers, true);
             bool? result = commentsWindow.ShowDialog();
             if (result != true)
             {
@@ -239,7 +228,7 @@ namespace TNovTasks
                 // бы на диске, а версии двух журналов разошлись бы.
                 // 🔴 Сам элемент не трогаем: этот же объект сериализуется в JSON на
                 // сервере. Имя модели уходит отдельным полем посылки.
-                if (useTNovPRO) proItems.Add(item);
+                proItems.Add(item);
             }
 
             string updatedJson = JsonConvert.SerializeObject(existingItems, Formatting.Indented);
@@ -261,7 +250,7 @@ namespace TNovTasks
                 // мы только что подняли версию в JSON, поэтому перевыдача
                 // обновляет задание, а не создаёт второе.
                 string proLine = null;
-                if (useTNovPRO && proSession != null && proItems.Count > 0)
+                if (proItems.Count > 0)
                 {
                     var sendResult = TasksPro.ProApiSession.RunSync(
                         () => proSession.SendTasksAsync(docName, proItems));
