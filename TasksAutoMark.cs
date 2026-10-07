@@ -59,7 +59,23 @@ namespace TNovTasks
             #endregion
 
 
-            int holeMaxNum = TaskTools.GetHoleMaxNumber(doc);
+            // История выдач: по ID элемента возвращаем прежнюю марку вместо нового номера
+            // (иначе КР потеряет связь с отверстием), а стёртые номера не выдаём повторно.
+            List<HoleGroupBaseItem> historyItems = new List<HoleGroupBaseItem>();
+            try
+            {
+                string jsonFilePath = config.ServerPath + "tasks/" + docName + ".json";
+                if (File.Exists(jsonFilePath))
+                    historyItems = JsonConvert.DeserializeObject<List<HoleGroupBaseItem>>(File.ReadAllText(jsonFilePath))
+                                   ?? new List<HoleGroupBaseItem>();
+            }
+            catch (Exception ex)
+            {
+                Logger.Log("История выдач не прочитана — " + ex.Message, 3);
+            }
+            Dictionary<long, string> knownMarks = TaskElementTracker.KnownMarkById(historyItems);
+
+            int holeMaxNum = Math.Max(TaskTools.GetHoleMaxNumber(doc), TaskElementTracker.MaxKnownNumber(historyItems));
 
             #region Диалог
             var qViewModel1 = new QuestionWindowViewModel();
@@ -115,6 +131,7 @@ namespace TNovTasks
             }
 
             List<string> newNums = new List<string>();
+            List<string> restoredNums = new List<string>();
 
             #region Основной код
             using (Transaction t1 = new Transaction(doc))
@@ -159,32 +176,37 @@ namespace TNovTasks
                         if (qok != null && qok == true) { } else continue;
                     }
 
-                    //заполняем Марку если пустая - пока только для отверстий
-                    ElementFilter elementFilter = (ElementFilter)new ElementParameterFilter(RevitApiCompat.CreateContainsRule(new ElementId(-1002002), "pmN.Отверстие"));
-                    IList<ElementId> groupElems = group.GetDependentElements(elementFilter);
+                    //заполняем Марку если пустая - для всех элементов задания (отверстия, рамы, шахты, приямки)
+                    List<CollectedElement> groupItems = TaskElementTracker.Collect(doc, group);
+                    HashSet<string> usedMarks = new HashSet<string>(groupItems.Select(c => c.Record.Mark).Where(m => m.Length > 0));
+                    List<CollectedElement> elemsWithoutMark = groupItems.Where(c => c.Record.Mark.Length == 0).ToList();
+                    newNums.Clear(); restoredNums.Clear();
 
-                    List<Element> elemsWithoutMark = new List<Element>();
-                    foreach (var groupElem in groupElems)
+                    foreach (var item in elemsWithoutMark)
                     {
-                        Element elem = doc.GetElement(groupElem);
-                        bool hasValue = elem.get_Parameter(BuiltInParameter.ALL_MODEL_MARK).HasValue;
-                        if (hasValue && elem.get_Parameter(BuiltInParameter.ALL_MODEL_MARK).AsString().Length == 0) hasValue = false;
-                        if (!hasValue) elemsWithoutMark.Add(elem);
-                    }
-
-                    foreach (var elem in elemsWithoutMark)
-                    {
-                        Logger.Log("Отверстие " + elem.Id.ToString(), 2);
+                        Element elem = item.Element;
+                        Logger.Log("Элемент " + elem.Id.ToString(), 2);
+                        string prevMark;
+                        if (knownMarks.TryGetValue(item.Record.ElementId, out prevMark) && !usedMarks.Contains(prevMark))
+                        {
+                            elem.get_Parameter(BuiltInParameter.ALL_MODEL_MARK).Set(prevMark);
+                            usedMarks.Add(prevMark);
+                            restoredNums.Add(prevMark);
+                            Logger.Log("   восстановлена по истории: " + prevMark, 2);
+                            continue;
+                        }
                         holeMaxNum++;
                         elem.get_Parameter(BuiltInParameter.ALL_MODEL_MARK).Set(holeMaxNum.ToString());
+                        usedMarks.Add(holeMaxNum.ToString());
                         newNums.Add(holeMaxNum.ToString());
                         Logger.Log("   " + holeMaxNum.ToString(), 2);
                     }
 
-
-
-                    new InfoWindow280("Отверстиям без номеров в группе " + group.Name + " назначены позиции: " +
-                        String.Join(", ", newNums)).ShowDialog();
+                    string report = "Элементам без номеров в группе " + group.Name + " назначены позиции: " +
+                        (newNums.Count > 0 ? String.Join(", ", newNums) : "-");
+                    if (restoredNums.Count > 0)
+                        report += ". Восстановлены прежние марки по истории выдач: " + String.Join(", ", restoredNums);
+                    new InfoWindow280(report).ShowDialog();
                 }
 
 

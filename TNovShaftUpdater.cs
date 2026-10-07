@@ -38,6 +38,7 @@ namespace TNovTasks
             try
             {
                 ExecuteCore(data);
+                MarkWatch.Flush(UpdaterName);
             }
             catch (Exception ex)
             {
@@ -149,8 +150,9 @@ namespace TNovTasks
                             if(prevValues&&elem.Location != null)
                             {
                                 //считываем предыдущие значения параметров
-                                ///структура значения параметра: СоглРук=СоглBIM=СоглКР=СуммаРазмеров=Координаты
+                                ///структура значения параметра: СоглРук=СоглBIM=СоглКР=СуммаРазмеров=Координаты=Марка
                                 string[] pars = prevValue.Split('=');
+                                MarkWatch.Check(doc, elem, pars); //стирание или смена марки -> журнал на сервере
                                 int Headstatus0 = 0; if (pars[0] == "1") Headstatus0 = 1;
                                 int BIMstatus0 = 0; if (pars.Length > 1 && pars[1] == "1") BIMstatus0 = 1;
                                 int STstatus0 = 0; if (pars.Length > 2 && pars[2] == "1") STstatus0 = 1;
@@ -292,7 +294,7 @@ namespace TNovTasks
                                 }
                                 //записываем новые значения параметров
                                 elem.get_Parameter(NTNovTextparamGuid).Set("1=" + BIMstatus1.ToString() + "=" + STstatus1.ToString() 
-                                    + "=" + dims.ToString() + "=" +point.ToString());
+                                    + "=" + dims.ToString() + "=" + point.ToString() + MarkWatch.Field(elem));
                                 
                                 
                                 
@@ -316,7 +318,7 @@ namespace TNovTasks
                                     {
                                         //записываем новые значения параметров
                                         elem.get_Parameter(NTNovTextparamGuid).Set("1=" + BIMstatus1.ToString() + "=" + STstatus1.ToString()
-                                            + "=" + dims.ToString() + "=" + point.ToString());
+                                            + "=" + dims.ToString() + "=" + point.ToString() + MarkWatch.Field(elem));
                                     }
                                 }
                             }

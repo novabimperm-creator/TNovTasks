@@ -136,6 +136,14 @@ namespace TNovTasks
             string currentDateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             #endregion
 
+            #region Проверка марок
+            // Элементы задания отслеживаются по Марке + ID. Пустая марка ломает и
+            // историю, и сверку у КР, поэтому с пустыми марками задание не выдаём.
+            // Стёртую марку, известную по прошлым выдачам (тот же ID), предлагаем вернуть.
+            if (!CheckMarks(doc, groupsList, existingItems))
+                return Result.Cancelled;
+            #endregion
+
             #region Сбор данных
             foreach (Group group in groupsList)
             {
@@ -213,6 +221,28 @@ namespace TNovTasks
             }
             foreach (var row in commentsWindow.Rows)
                 row.Item.AssigneeId = row.AssigneeId;
+            #endregion
+
+            #region История элементов
+            // Снимок состава каждой выдаваемой группы и сравнение с прошлой выдачей.
+            // Сбой здесь не должен ронять выдачу — пишем в лог и идём дальше.
+            foreach (Group group in groupsList)
+            {
+                var item = existingItems.FirstOrDefault(i => i.HoleGroupName == group.Name);
+                if (item == null) continue;
+                try
+                {
+                    var current = TaskElementTracker.Collect(doc, group).Select(c => c.Record).ToList();
+                    item.Elements = TaskElementTracker.Merge(item.Elements, current, item.TaskVersion);
+                    int changed = item.Elements.Count(e => e.LastChangedVersion == item.TaskVersion);
+                    Logger.Log("История элементов «" + group.Name + "»: элементов " + current.Count + ", изменено " + changed, 1);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log("История элементов «" + group.Name + "» не записана — " + ex.Message, 4);
+                }
+                item.AppendIssueHistory();
+            }
             #endregion
 
             List<object> proItems = new List<object>();
@@ -350,6 +380,71 @@ namespace TNovTasks
 
             return Result.Succeeded;
 
+        }
+
+        /// <summary>
+        /// Все элементы задания в выдаваемых группах должны иметь уникальные (в группе)
+        /// непустые марки. Стёртые марки, известные по истории, предлагаем восстановить.
+        /// false — выдачу прерываем.
+        /// </summary>
+        static bool CheckMarks(Document doc, List<Group> groupsList, List<HoleGroupBaseItem> existingItems)
+        {
+            var known = TaskElementTracker.KnownMarkById(existingItems);
+            var collected = groupsList.SelectMany(g => TaskElementTracker.Collect(doc, g)).ToList();
+            var problems = TaskElementTracker.FindMarkProblems(collected, known);
+            if (problems.Count == 0) return true;
+
+            foreach (var p in problems)
+                Logger.Log("Марка: группа " + p.Item.GroupName + ", ID " + p.Item.Record.ElementId + " — " + p.Text, 3);
+
+            var restorable = problems.Where(p => p.Restorable).ToList();
+            if (restorable.Count > 0)
+            {
+                var qViewModel = new QuestionWindowViewModel();
+                qViewModel.headtxt = "У " + restorable.Count + " элементов стёрты марки, известные по прошлым выдачам ("
+                    + string.Join(", ", restorable.Take(10).Select(p => "ID " + p.Item.Record.ElementId + " → " + p.PrevMark))
+                    + (restorable.Count > 10 ? ", …" : "") + "). Восстановить марки?";
+                var qwpfview = new QuestionWindow280(qViewModel);
+                qViewModel.CloseRequest += (s, e) => qwpfview.Close();
+                bool? qok = qwpfview.ShowDialog();
+                if (qok == true)
+                {
+                    using (Transaction t = new Transaction(doc, "Задания. Восстановление марок"))
+                    {
+                        t.Start();
+                        foreach (var p in restorable)
+                        {
+                            try
+                            {
+                                Parameter mark = p.Item.Element.get_Parameter(BuiltInParameter.ALL_MODEL_MARK);
+                                if (mark != null && !mark.IsReadOnly && mark.Set(p.PrevMark))
+                                {
+                                    problems.Remove(p);
+                                    Logger.Log("Марка восстановлена: ID " + p.Item.Record.ElementId + " → " + p.PrevMark, 1);
+                                }
+                                else p.Text += " — не удалось восстановить";
+                            }
+                            catch (Exception ex)
+                            {
+                                p.Text += " — не удалось восстановить: " + ex.Message;
+                                Logger.Log("Марка ID " + p.Item.Record.ElementId + " не восстановлена — " + ex.Message, 3);
+                            }
+                        }
+                        t.Commit();
+                    }
+                }
+            }
+            if (problems.Count == 0) return true;
+
+            var viewModel = new InfoWindowTextFieldViewModel();
+            viewModel.headtxt = "Задание не выдано: у элементов задания не заполнены или повторяются марки.";
+            viewModel.ids = string.Join("\n", problems
+                .OrderBy(p => p.Item.GroupName).ThenBy(p => p.Item.Record.ElementId)
+                .Select(p => p.Item.GroupName + ", ID " + p.Item.Record.ElementId + ": " + p.Text));
+            viewModel.lowtxt = "Заполните марки (кнопка «Автомаркировка») и повторите выдачу.";
+            new InfoWindowTextField(viewModel).ShowDialog();
+            Logger.Log("Проблемы с марками. Завершение работы", 3);
+            return false;
         }
     }
 }

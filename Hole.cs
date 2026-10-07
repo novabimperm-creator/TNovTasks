@@ -44,6 +44,12 @@ namespace TNovTasks
         public string STMisc { get; set; }
         public string MEPComments { get; set; }
         public string MEPCommentsHistory { get; set; }
+        /// <summary>Кто и когда выдавал каждую версию: «v3: 2026-10-07 14:03:11 ivanov; v4: …».</summary>
+        [TasksPro.ProIgnore]
+        public string IssueHistory { get; set; }
+        /// <summary>Элементы группы на момент последней выдачи, с историей изменений.</summary>
+        [TasksPro.ProIgnore]
+        public List<TNovCommon.TaskElementRecord> Elements { get; set; }
         [JsonIgnore]
         public string NewComment { get; set; }
         /// <summary>Ответственный в TNovPRO (userId), выбранный при выдаче; null — не менять.</summary>
@@ -67,6 +73,13 @@ namespace TNovTasks
                 MEPCommentsHistory = entry;
             else
                 MEPCommentsHistory += Environment.NewLine + entry;
+        }
+
+        /// <summary>Добавляет запись «кто и когда выдал» для текущей TaskVersion.</summary>
+        public void AppendIssueHistory()
+        {
+            string entry = $"v{TaskVersion}: {TaskDate} {Initiator}";
+            IssueHistory = string.IsNullOrEmpty(IssueHistory) ? entry : IssueHistory + "; " + entry;
         }
     }
     public class HoleGroup : INotifyPropertyChanged

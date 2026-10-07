@@ -56,12 +56,30 @@ namespace TNovTasks.TasksPro
         }
     }
 
+    /// <summary>
+    /// Свойство пишется в JSON заданий на сервере, но не уходит в TNovPRO
+    /// (например, состав группы с историей — платформе он не нужен, а посылку раздувает).
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Property)]
+    public sealed class ProIgnoreAttribute : Attribute { }
+
+    internal sealed class ProContractResolver : CamelCasePropertyNamesContractResolver
+    {
+        protected override JsonProperty CreateProperty(System.Reflection.MemberInfo member, MemberSerialization memberSerialization)
+        {
+            var property = base.CreateProperty(member, memberSerialization);
+            if (member.IsDefined(typeof(ProIgnoreAttribute), true))
+                property.ShouldSerialize = _ => false;
+            return property;
+        }
+    }
+
     /// <summary>Единые настройки JSON под контракт API дома (camelCase).</summary>
     internal static class ProJson
     {
         public static readonly JsonSerializerSettings Settings = new JsonSerializerSettings
         {
-            ContractResolver = new CamelCasePropertyNamesContractResolver(),
+            ContractResolver = new ProContractResolver(),
             NullValueHandling = NullValueHandling.Ignore,
         };
 
