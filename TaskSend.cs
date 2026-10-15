@@ -30,11 +30,15 @@ namespace TNovTasks
             UIApplication uiApp = RevitAPI.UiApplication; Autodesk.Revit.ApplicationServices.Application rvtApp = uiApp.Application;
             string docName = doc.Title.ToString(); docName = docName.Replace(",", " ");
             string userName = rvtApp.Username; userName = userName.Replace(",", "");
-            string docNameUserName = "_" + userName; docName = docName.Replace(docNameUserName, "");
+            docName = TNovCommon.ModelName.StripUserSuffix(docName, userName);
             docName = docName.Replace(",", "");
             #endregion
 
             TNovConfig config = TNovConfigLoad.LoadConfig(DBCommandName, TNovVersion);
+            if (config == null) return Result.Failed;
+            // TNovPRO (вход, сотрудники, отправка на сайт) — только в корпоративной конфигурации.
+            // В личной задание пишется лишь в JSON в папке конфигурации.
+            bool corp = CorpGate.IsCorp(config);
 
             if (docName.Contains("Задани") || docName.Contains("задани") || docName.Contains("-ЗД") || docName.Contains("_ЗД") || docName.Contains("ЗАДАНИЕ")) { }
             else
@@ -66,29 +70,32 @@ namespace TNovTasks
             #endregion
 
             #region Авторизация в TNovPRO
-            // Обязательна при любой конфигурации TNovConfig: задание пишется и в
+            // Обязательна в корпоративной конфигурации: задание пишется и в
             // JSON на сервере, и в TNovPRO.
             // Вход — через браузер, как в TNovUtils/Issues; сессия живёт между
             // нажатиями кнопки, поэтому обычно ничего не открывается вовсе.
             TasksPro.ProApiSession proSession = null;
-            bool proAuthorized = false;
-            try
+            if (corp)
             {
-                proSession = TasksPro.ProApiSession.Instance;
-                proAuthorized = TasksPro.ProApiSession.RunSync(() => proSession.EnsureAuthAsync());
-            }
-            catch (Exception ex)
-            {
-                Logger.Log("TNovPRO: ошибка входа — " + ex.Message, 4);
-            }
+                bool proAuthorized = false;
+                try
+                {
+                    proSession = TasksPro.ProApiSession.Instance;
+                    proAuthorized = TasksPro.ProApiSession.RunSync(() => proSession.EnsureAuthAsync());
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log("TNovPRO: ошибка входа — " + ex.Message, 4);
+                }
 
-            if (!proAuthorized)
-            {
-                new InfoWindow280("Авторизуйтесь в TNovPRO для возможности выдать задание!").ShowDialog();
-                Logger.Log("Нет авторизации в TNovPRO. Завершение работы", 4);
-                return Result.Failed;
+                if (!proAuthorized)
+                {
+                    new InfoWindow280("Авторизуйтесь в TNovPRO для возможности выдать задание!").ShowDialog();
+                    Logger.Log("Нет авторизации в TNovPRO. Завершение работы", 4);
+                    return Result.Failed;
+                }
+                Logger.Log("TNovPRO: сессия готова", 1);
             }
-            Logger.Log("TNovPRO: сессия готова", 1);
             #endregion
 
             #region Выборка
@@ -107,17 +114,6 @@ namespace TNovTasks
             if (groupsList.Count < 1) { Logger.Log("Отсутствуют группы в выборке. Завершение работы", 3); return Result.Cancelled; }
             #endregion
 
-
-            //имя и роль пользователя
-            string userDepartment = "-";
-            string[] rolesFile = TNovCommon.Server.ServerData.ReadAllLines("roles.txt");
-            foreach (string role in rolesFile)
-            {
-                if (role.Contains(userName))
-                {
-                    string[] line = role.Split(','); userDepartment = line[1]; break;
-                }
-            }
 
             #region Десериализация
 
@@ -203,16 +199,19 @@ namespace TNovTasks
             // Сотрудники TNovPRO для выбора ответственного. Не загрузились — задание
             // всё равно выдаём, просто без назначения.
             List<TasksPro.ProUser> proUsers = null;
-            try
+            if (corp)
             {
-                proUsers = TasksPro.ProApiSession.RunSync(() => proSession.GetUsersAsync());
-            }
-            catch (Exception ex)
-            {
-                Logger.Log("TNovPRO: список сотрудников не загружен — " + ex.Message, 3);
+                try
+                {
+                    proUsers = TasksPro.ProApiSession.RunSync(() => proSession.GetUsersAsync());
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log("TNovPRO: список сотрудников не загружен — " + ex.Message, 3);
+                }
             }
 
-            var commentsWindow = new CommentsWindow280(itemsForComments, proUsers, true);
+            var commentsWindow = new CommentsWindow280(itemsForComments, proUsers, corp);
             bool? result = commentsWindow.ShowDialog();
             if (result != true)
             {
@@ -272,6 +271,7 @@ namespace TNovTasks
 
             try
             {
+                Directory.CreateDirectory(Path.GetDirectoryName(jsonFilePath)); // в личной конфигурации tasks\ ещё нет
                 File.WriteAllText(jsonFilePath, updatedJson);
 
                 // ── Отправка в TNovPRO ───────────────────────────────────────
@@ -280,7 +280,7 @@ namespace TNovTasks
                 // мы только что подняли версию в JSON, поэтому перевыдача
                 // обновляет задание, а не создаёт второе.
                 string proLine = null;
-                if (proItems.Count > 0)
+                if (corp && proItems.Count > 0)
                 {
                     var sendResult = TasksPro.ProApiSession.RunSync(
                         () => proSession.SendTasksAsync(docName, proItems));
@@ -366,7 +366,7 @@ namespace TNovTasks
                 var viewModel2 = new InfoWindowTextFieldViewModel();
                 viewModel2.headtxt = "Задания успешно отправлены:";
                 viewModel2.ids = String.Join("\n", names);
-                viewModel2.lowtxt = proLine ?? "Они появятся в Журнале заданий с уведомлением.";
+                viewModel2.lowtxt = proLine ?? (corp ? "Они появятся в Журнале заданий с уведомлением." : "Задания записаны в " + jsonFilePath);
                 var wpfview2 = new InfoWindowTextField(viewModel2);
                 bool? ok2 = wpfview2.ShowDialog();
             }

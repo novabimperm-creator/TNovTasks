@@ -95,7 +95,7 @@ namespace TNovTasks
         {
             string name = (doc.Title ?? "").Replace(",", " ");
             string user = (doc.Application?.Username ?? "").Replace(",", "");
-            name = name.Replace("_" + user, "");
+            name = TNovCommon.ModelName.StripUserSuffix(name, user);
             return name.Replace(",", "");
         }
     }

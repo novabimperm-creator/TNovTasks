@@ -30,7 +30,7 @@ namespace TNovTasks
             UIApplication uiApp = RevitAPI.UiApplication; Autodesk.Revit.ApplicationServices.Application rvtApp = uiApp.Application;
             string docName = doc.Title.ToString(); docName = docName.Replace(",", " ");
             string userName = rvtApp.Username; userName = userName.Replace(",", "");
-            string docNameUserName = "_" + userName; docName = docName.Replace(docNameUserName, "");
+            docName = TNovCommon.ModelName.StripUserSuffix(docName, userName);
             docName = docName.Replace(",", "");
             #endregion
 
@@ -120,15 +120,7 @@ namespace TNovTasks
             if (holeMaxNum == 0) Logger.Log("Номера еще не заполнялись, начнем с 1", 1);
 
             //имя и роль пользователя
-            string userDepartment = "-";
-            string[] rolesFile = TNovCommon.Server.ServerData.ReadAllLines("roles.txt");
-            foreach (string role in rolesFile)
-            {
-                if (role.Contains(userName))
-                {
-                    string[] line = role.Split(','); userDepartment = line[1]; break;
-                }
-            }
+            string userDepartment = RolesService.GetCurrentUser(userName).Department;
 
             List<string> newNums = new List<string>();
             List<string> restoredNums = new List<string>();
@@ -143,7 +135,7 @@ namespace TNovTasks
                 {
                     Logger.Log("Группа " + group.Name, 1);
                     bool approveDepartment = true;
-                    string[] parts = group.Name.Split('_');
+                    string[] parts = group.GroupType.Name.Split('_');
                     switch (parts[0]) //вытаскиваем "ВК", "ОВ", "ЭО"/"ЭЛ" или "СС" из имени группы
                     {
                         case "ВК":

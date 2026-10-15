@@ -33,7 +33,7 @@ namespace TNovTasks
             UIApplication uiApp = RevitAPI.UiApplication; Autodesk.Revit.ApplicationServices.Application rvtApp = uiApp.Application;
             string docName = doc.Title.ToString(); docName = docName.Replace(",", " ");
             string userName = rvtApp.Username; userName = userName.Replace(",", "");
-            string docNameUserName = "_" + userName; docName = docName.Replace(docNameUserName, "");
+            docName = TNovCommon.ModelName.StripUserSuffix(docName, userName);
             docName = docName.Replace(",", "");
             #endregion
 

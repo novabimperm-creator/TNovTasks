@@ -26,7 +26,7 @@ namespace TNovTasks
             List<HoleGroup> holeGroups = new List<HoleGroup>();
 
             string docName = linkDoc.Title.ToString();
-            docName = docName.Replace(",", " "); string docNameUserName = "_" + userName; docName = docName.Replace(docNameUserName, "");
+            docName = docName.Replace(",", " "); docName = TNovCommon.ModelName.StripUserSuffix(docName, userName);
             // Десериализация данных из базы
             List<HoleGroupBaseItem> existingItems = new List<HoleGroupBaseItem>();
             TNovConfig config = TNovConfigLoad.LoadConfig();
@@ -74,7 +74,7 @@ namespace TNovTasks
                     else
                     {
                         string docName1 = doc.Title.ToString();
-                        docName1 = docName1.Replace(",", " "); docName1 = docName1.Replace(docNameUserName, "");
+                        docName1 = docName1.Replace(",", " "); docName1 = TNovCommon.ModelName.StripUserSuffix(docName1, userName);
                         if (docName1.Contains("отсоед")) { }
                         else 
                         {
@@ -220,8 +220,9 @@ namespace TNovTasks
                     foreach (var group in groups)
                     {
                         status = "";
-                        string[] nameParts1 = group.Name.Split('_');
-                        string shortName1 = group.Name;
+                        //имя типа: у экземпляра с исключенными элементами Revit дописывает к имени " (исключенные компоненты)"
+                        string[] nameParts1 = group.GroupType.Name.Split('_');
+                        string shortName1 = group.GroupType.Name;
                         if (nameParts1.Length > 2) shortName1 = nameParts1[0] + '_' + nameParts1[1] + '_' + nameParts1[2]; //учет групп, созданных по старой концепции
                         if (nameParts.Length < 3) status = "Некорректное имя группы в модели задания.";
                         if (shortName1 == shortName)
@@ -330,8 +331,8 @@ namespace TNovTasks
                     //ищем задание в текущей модели
                     foreach (var group in groups)
                     {
-                        string[] nameParts1 = group.Name.Split('_');
-                        string shortName1 = group.Name;
+                        string[] nameParts1 = group.GroupType.Name.Split('_');
+                        string shortName1 = group.GroupType.Name;
                         if (nameParts1.Length > 2) shortName1 = nameParts1[0] + '_' + nameParts1[1] + '_' + nameParts1[2];
                         if (shortName1 == shortName)
                         {
@@ -894,18 +895,7 @@ namespace TNovTasks
         {
             string docName = doc.Title.ToString();
             TNovConfig config = TNovConfigLoad.LoadConfig();
-            //имя и роль пользователя
-            string userDepartment = "-";
-            string[] rolesFile = TNovCommon.Server.ServerData.ReadAllLines("roles.txt");
-            foreach (string role in rolesFile)
-            {
-                if (role.Contains(userName))
-                {
-                    string[] line = role.Split(','); userDepartment = line[1]; break;
-                }
-            }
-
-            docName = docName.Replace(",", " "); string docNameUserName = "_" + userName; docName = docName.Replace(docNameUserName, "");
+            docName = docName.Replace(",", " "); docName = TNovCommon.ModelName.StripUserSuffix(docName, userName);
 
             List<Group> groups = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_IOSModelGroups)
                 .WhereElementIsNotElementType()
@@ -915,7 +905,7 @@ namespace TNovTasks
             List<string> names = new List<string>();
             foreach (Group group in groups)
             {
-                names.Add(group.Name);
+                names.Add(group.GroupType.Name);
             }
             List<HoleGroupBaseItem> existingItems = new List<HoleGroupBaseItem>();
             // Десериализация
@@ -930,7 +920,7 @@ namespace TNovTasks
 
             foreach (Group group in groups)
             {
-                string groupName = group.Name;
+                string groupName = group.GroupType.Name;
                 if (string.IsNullOrEmpty(groupName))
                     continue;
 
@@ -1008,8 +998,8 @@ namespace TNovTasks
                     ElementId groupId = elem.GroupId;
                     if (RevitApiCompat.ElementIdIntValue(groupId) > 0)
                     {
-                        Element g = doc.GetElement(groupId);
-                        groupName = g.Name;
+                        Group g = (Group)doc.GetElement(groupId);
+                        groupName = g.GroupType.Name;
                     }
                 }
             }
@@ -1184,8 +1174,8 @@ namespace TNovTasks
                     Group targetGroupInCurrentModel = null;
                     foreach (var group in groups) //ищем группу в текущей модели
                     {
-                        string[] nameParts = group.Name.Split('_');
-                        string shortName = group.Name;
+                        string[] nameParts = group.GroupType.Name.Split('_');
+                        string shortName = group.GroupType.Name;
                         if (nameParts.Length > 2) shortName = nameParts[0] + '_' + nameParts[1] + '_' + nameParts[2];
 
                         if (shortName == groupName)
@@ -1913,12 +1903,12 @@ namespace TNovTasks
             string gName = "";
             foreach (var group in groups)
             {
-                string[] nameParts1 = group.Name.Split('_');
-                string shortName1 = group.Name;
+                string[] nameParts1 = group.GroupType.Name.Split('_');
+                string shortName1 = group.GroupType.Name;
                 if (nameParts1.Length > 2) shortName1 = nameParts1[0] + '_' + nameParts1[1] + '_' + nameParts1[2];
                 if (shortName1 == Name)
                 {
-                    elemstoremove.Add(group.Id); gName = group.Name;
+                    elemstoremove.Add(group.Id); gName = group.GroupType.Name;
                     //break;не надо - удаляем все такие группы!
                 }
             }
