@@ -230,7 +230,12 @@ namespace TNovTasks.TasksPro
 
                 var acceptTask = listener.AcceptTcpClientAsync();
                 var to = timeout ?? TimeSpan.FromMinutes(3);
-                if (await Task.WhenAny(acceptTask, Task.Delay(to)) != acceptTask) return false;
+                if (await Task.WhenAny(acceptTask, Task.Delay(to)) != acceptTask)
+                {
+                    // listener.Stop() в finally роняет acceptTask — наблюдаем ошибку.
+                    acceptTask.ContinueWith(t => { var _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+                    return false;
+                }
 
                 string code, gotState;
                 using (var client = await acceptTask)

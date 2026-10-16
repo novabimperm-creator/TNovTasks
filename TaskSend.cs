@@ -80,8 +80,10 @@ namespace TNovTasks
                 bool proAuthorized = false;
                 try
                 {
+                    Logger.Log("TNovPRO: проверка входа", 1);
                     proSession = TasksPro.ProApiSession.Instance;
-                    proAuthorized = TasksPro.ProApiSession.RunSync(() => proSession.EnsureAuthAsync());
+                    proAuthorized = TasksPro.ProApiSession.RunSync(() => proSession.EnsureAuthAsync(),
+                        "Вход в TNovPRO… Если открылся браузер — войдите в TNovPRO и вернитесь в Revit.");
                 }
                 catch (Exception ex)
                 {
@@ -203,7 +205,8 @@ namespace TNovTasks
             {
                 try
                 {
-                    proUsers = TasksPro.ProApiSession.RunSync(() => proSession.GetUsersAsync());
+                    proUsers = TasksPro.ProApiSession.RunSync(() => proSession.GetUsersAsync(),
+                        "Загрузка списка сотрудников TNovPRO…");
                 }
                 catch (Exception ex)
                 {
@@ -282,8 +285,16 @@ namespace TNovTasks
                 string proLine = null;
                 if (corp && proItems.Count > 0)
                 {
-                    var sendResult = TasksPro.ProApiSession.RunSync(
-                        () => proSession.SendTasksAsync(docName, proItems));
+                    TasksPro.ProSendResult sendResult;
+                    try
+                    {
+                        sendResult = TasksPro.ProApiSession.RunSync(
+                            () => proSession.SendTasksAsync(docName, proItems), "Отправка заданий в TNovPRO…");
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        sendResult = new TasksPro.ProSendResult { Error = "отправка отменена", Detail = "отменено пользователем" };
+                    }
 
                     if (sendResult.Ok)
                     {
@@ -307,8 +318,13 @@ namespace TNovTasks
                                 continue;
                             }
 
-                            string uploadError = TasksPro.ProApiSession.RunSync(
-                                () => proSession.UploadGeometryAsync(taskId, geo.Glb));
+                            string uploadError;
+                            try
+                            {
+                                uploadError = TasksPro.ProApiSession.RunSync(
+                                    () => proSession.UploadGeometryAsync(taskId, geo.Glb), "Отправка 3D группы «" + group.Name + "»…");
+                            }
+                            catch (OperationCanceledException) { uploadError = "отменено пользователем"; }
                             if (uploadError == null)
                             {
                                 shipped3d++;
@@ -337,8 +353,13 @@ namespace TNovTasks
                                 continue;
                             }
 
-                            string assignError = TasksPro.ProApiSession.RunSync(
-                                () => proSession.SetAssigneeAsync(taskId, item.AssigneeId));
+                            string assignError;
+                            try
+                            {
+                                assignError = TasksPro.ProApiSession.RunSync(
+                                    () => proSession.SetAssigneeAsync(taskId, item.AssigneeId), "Назначение ответственных в TNovPRO…");
+                            }
+                            catch (OperationCanceledException) { assignError = "отменено пользователем"; }
                             if (assignError == null)
                             {
                                 assigned++;

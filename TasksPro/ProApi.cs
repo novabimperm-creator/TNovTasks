@@ -286,26 +286,25 @@ namespace TNovTasks.TasksPro
             string.IsNullOrEmpty(s) ? "" : (s.Length <= n ? s : s.Substring(0, n));
 
         /// <summary>
-        /// Синхронный вызов из команды Revit. Уходим с UI-потока намеренно:
-        /// .Result прямо в обработчике WPF схватывает контекст синхронизации и
-        /// вешает Revit намертво.
+        /// Синхронный вызов из команды Revit. Работа идёт в пуле потоков: .Result
+        /// прямо в обработчике WPF схватывает контекст синхронизации и вешает Revit.
+        /// Ждать голым Wait() на UI-потоке тоже нельзя: вход через браузер длится
+        /// до 3 минут, Revit всё это время «Не отвечает», а нажатия по зависшему
+        /// окну заканчивались неустранимой ошибкой. Поэтому, если ответ не пришёл
+        /// сразу, ждём под модальным окном с «Отменой».
+        /// Отмена → OperationCanceledException; сама работа доживает в фоне.
         /// </summary>
-        public static T RunSync<T>(Func<Task<T>> work)
+        public static T RunSync<T>(Func<Task<T>> work, string waitText = null)
         {
-            T result = default(T);
-            Exception error = null;
-            using (var done = new ManualResetEventSlim(false))
-            {
-                ThreadPool.QueueUserWorkItem(async _ =>
-                {
-                    try { result = await work().ConfigureAwait(false); }
-                    catch (Exception ex) { error = ex; }
-                    finally { done.Set(); }
-                });
-                done.Wait();
-            }
-            if (error != null) throw error;
-            return result;
+            var task = Task.Run(work);
+            // Ошибку брошенной (отменённой) задачи наблюдаем, чтобы она не всплыла позже.
+            task.ContinueWith(t => { var _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+
+            if (!((IAsyncResult)task).AsyncWaitHandle.WaitOne(300)
+                && !ProWaitWindow.ShowUntil(task, waitText ?? "Обмен данными с TNovPRO…"))
+                throw new OperationCanceledException("Отменено пользователем");
+
+            return task.GetAwaiter().GetResult();
         }
     }
 }
