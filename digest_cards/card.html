@@ -1,0 +1,37 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0}
+body{width:1080px;height:1350px;font-family:"Segoe UI",Arial,sans-serif;overflow:hidden;color:#fff}
+#c{width:1080px;height:1350px;position:relative;padding:80px 72px;display:flex;flex-direction:column}
+.bg{position:absolute;inset:0;z-index:0}
+.bg i{position:absolute;border-radius:50%;background:rgba(255,255,255,.07)}
+.z{position:relative;z-index:1}
+.top{display:flex;justify-content:space-between;align-items:center;font-size:28px;font-weight:600;letter-spacing:1px;opacity:.9}
+.pill{background:rgba(255,255,255,.18);padding:10px 26px;border-radius:40px}
+.head{display:flex;align-items:center;gap:32px;margin-top:56px}
+.num{width:120px;height:120px;border-radius:32px;background:#fff;font-size:72px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none}
+.ico{font-size:84px;margin-left:auto}
+h1{font-size:64px;line-height:1.08;font-weight:800;margin-top:40px}
+.sub{font-size:30px;opacity:.85;margin-top:14px}
+ul{list-style:none;padding:0;margin-top:48px;display:flex;flex-direction:column;gap:18px;flex:1;justify-content:flex-start}
+.sp li{padding:36px 34px}li{background:rgba(255,255,255,.14);border-radius:26px;padding:24px 30px;display:flex;gap:24px;align-items:center;line-height:1.28;backdrop-filter:blur(4px)}
+li b{flex:none;width:44px;height:44px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:26px}
+.foot{font-size:26px;opacity:.75;display:flex;justify-content:space-between;margin-top:24px}
+.dense .head{margin-top:24px}.dense .num{width:90px;height:90px;font-size:54px;border-radius:24px}.dense .ico{font-size:64px}.dense h1{font-size:52px;margin-top:20px}.dense .sub{font-size:26px}.dense ul{margin-top:32px;gap:16px}.dense li{padding:22px 28px}.dense{padding-top:60px!important;padding-bottom:50px!important}</style></head><body><div id="c"></div><script>
+const D=[
+{t:"Модуль «Общие»",s:"Новые функции",i:"🧰",g:["#1e6fff","#0a3fae"],f:38,l:["Связи проекта, скрыть оси, уровни, арматуру","Перенести — смена уровня без смещения элемента","Справка — новая панель с информацией из Wiki"]},
+{t:"Чек-лист",s:"Новые автопроверки",i:"✅",g:["#12b886","#087f5b"],f:29,dense:1,l:["Ночной запуск автопроверок","Отсутствие конфликтов с разбивочным файлом","Заполненность параметров ADSK (ВК, ОВ)","Нет влажных помещений над электрощитовыми и узлами связи (АР)","Нет арматуры и заглушек ВК, ОВ над кабельными лотками","Отсутствие DWG-связей, видимых в 3D","Поиск на стенах светильников, перекрытых коммуникациями (ЭЛ)","Правильность заполнения N_Эт.Номер (АР)"]},
+{t:"Изменения",s:"Глубокая переработка",i:"🔄",g:["#f76707","#c2410c"],f:46,l:["Плагин глубоко переработан в полноценный Менеджер изменений"]},
+{t:"Модуль «Сводная спека»",s:"Улучшения СС и ВК, ОВ",i:"📊",g:["#7048e8","#4527a0"],f:36,l:["СС: добавлено промежуточное окно проверки параметров коробов и лотков","ВК, ОВ: улучшена логика работы с изоляцией","ВК, ОВ: добавлена постпроверка правильности заполнения параметров"]},
+{t:"Модуль «Электрика»",s:"Поддержка ПС",i:"⚡",g:["#f59f00","#b45309"],f:42,l:["Добавлена обработка моделей ПС","Добавлено заполнение «Группирования» у крышек и перегородок лотков СС ПС"]},
+{t:"Модуль «Слаботочка»",s:"Новая функция",i:"📡",g:["#0c8599","#085566"],f:50,l:["Структурная схема (ПС)"]},
+{t:"Небольшие мелочи",s:"Приятные улучшения",i:"✨",g:["#d6336c","#9c1c4b"],f:38,l:["Кнопка минимизации окна в некоторых окнах для удобства работы (Чек-лист, Вопросы)","Полная поддержка Revit 2027 — новый проект планируется в нём"]}
+];
+const n=+(location.search.match(/i=(\d+)/)||[0,0])[1],d=D[n];
+if(d.dense)c.classList.add("dense");c.style.background=`linear-gradient(150deg,${d.g[0]},${d.g[1]})`;
+c.innerHTML=`<div class=bg><i style="width:700px;height:700px;right:-250px;top:-250px"></i><i style="width:500px;height:500px;left:-200px;bottom:-180px"></i></div>
+<div class="z top"><span>TNov</span><span class=pill>Дайджест · сентябрь 2026</span></div>
+<div class="z head"><div class=num style="color:${d.g[1]}">${n+1}</div><div class=ico>${d.i}</div></div>
+<h1 class=z>${d.t}</h1><div class="z sub">${d.s}</div>
+<ul class=z style="font-size:${d.f}px">${d.l.map(x=>`<li><b style="color:${d.g[1]}">✓</b><span>${x}</span></li>`).join("")}</ul>
+<div class="z foot"><span>Обновления TNov</span><span>${n+1} / ${D.length}</span></div>`;
+</script></body></html>
