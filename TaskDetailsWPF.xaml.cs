@@ -49,7 +49,7 @@ namespace TNovTasks
             if (scenario == 2) replaceButton.Visibility = System.Windows.Visibility.Hidden;
             foreach (Hole hole in viewModel.holes)
             {
-                if (hole.status.Contains("КР")) { replaceButton.Visibility = System.Windows.Visibility.Hidden; break; }
+                if (hole.status.Contains("согласован")) { replaceButton.Visibility = System.Windows.Visibility.Hidden; break; }
             }
 
 
@@ -58,7 +58,6 @@ namespace TNovTasks
             var nameTitle = new TextBlock { Text = "Поз.", Margin = new Thickness(5, 5, 5, 5), Width = 30, Foreground = headerBrush, FontWeight = FontWeights.SemiBold }; sp02.Children.Add(nameTitle);
             var widthTitle = new TextBlock { Text = "Размеры", Margin = new Thickness(5, 5, 5, 5), Width = 170, Foreground = headerBrush, FontWeight = FontWeights.SemiBold }; sp02.Children.Add(widthTitle);
             var bTitle = new TextBlock { Text = "BIM", Margin = new Thickness(5, 5, 5, 5), Width = 50, Foreground = headerBrush, FontWeight = FontWeights.SemiBold }; sp02.Children.Add(bTitle);
-            var sTitle = new TextBlock { Text = "КР", Margin = new Thickness(5, 5, 5, 5), Width = 50, Foreground = headerBrush, FontWeight = FontWeights.SemiBold }; sp02.Children.Add(sTitle);
             var xTitle = new TextBlock { Text = "X", Margin = new Thickness(5, 5, 5, 5), Width = 50, Foreground = headerBrush, FontWeight = FontWeights.SemiBold }; sp02.Children.Add(xTitle);
             var yTitle = new TextBlock { Text = "Y", Margin = new Thickness(5, 5, 5, 5), Width = 50, Foreground = headerBrush, FontWeight = FontWeights.SemiBold }; sp02.Children.Add(yTitle);
             var zTitle = new TextBlock { Text = "Z", Margin = new Thickness(5, 5, 5, 5), Width = 50, Foreground = headerBrush, FontWeight = FontWeights.SemiBold }; sp02.Children.Add(zTitle);
@@ -77,14 +76,13 @@ namespace TNovTasks
                 else dims = hole.width.ToString() + "х" + hole.height.ToString();
                 var dimsBlock = new TextBlock { Text = dims, TextWrapping = TextWrapping.Wrap, Width = 170, Margin = new Thickness(5, 5, 5, 5), Foreground = cellBrush }; sp.Children.Add(dimsBlock);
                 var bBlock = new TextBlock { Text = hole.coordStatusBIM, TextWrapping = TextWrapping.Wrap, Width = 50, Margin = new Thickness(5, 5, 5, 5), Foreground = cellBrush }; sp.Children.Add(bBlock);
-                var sBlock = new TextBlock { Text = hole.coordStatusST, TextWrapping = TextWrapping.Wrap, Width = 50, Margin = new Thickness(5, 5, 5, 5), Foreground = cellBrush }; sp.Children.Add(sBlock);
                 var xBlock = new TextBlock { Text = hole.x.ToString(), TextWrapping = TextWrapping.Wrap, Width = 50, Margin = new Thickness(5, 5, 5, 5), Foreground = cellBrush }; sp.Children.Add(xBlock);
                 var yBlock = new TextBlock { Text = hole.y.ToString(), TextWrapping = TextWrapping.Wrap, Width = 50, Margin = new Thickness(5, 5, 5, 5), Foreground = cellBrush }; sp.Children.Add(yBlock);
                 var zBlock = new TextBlock { Text = hole.z.ToString(), TextWrapping = TextWrapping.Wrap, Width = 50, Margin = new Thickness(5, 5, 5, 5), Foreground = cellBrush }; sp.Children.Add(zBlock);
                 var statusBlock = new TextBlock { Text = hole.status, TextWrapping = TextWrapping.Wrap, Width = 150, Margin = new Thickness(5, 5, 5, 5), Foreground = cellBrush }; sp.Children.Add(statusBlock);
                 string mark = hole.mark;
                 bool showButton = true;
-                if (hole.status.Contains("КР")) { showButton = false; }
+                if (hole.status.Contains("согласован")) { showButton = false; }
                 else if (hole.status.Contains("Не вставлено.")) { buttonText = "Вставить"; sp.Background = alertBrush; }
                 else if (hole.status.Length == 0) { showButton = false; }
                 else if (hole.status.Contains("удалено в Задании")) { buttonText = "Удалить"; sp.Background = alertBrush; mark = hole.id1.ToString(); }

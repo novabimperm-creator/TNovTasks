@@ -54,7 +54,7 @@ namespace TNovTasks
                     buttonText = "Вставить"; order = 2;
                     buttonToolTip = "Первичная вставка группы с отверстиями в текущую модель";
                 }
-                if (status.Contains("Марка") || status.Contains("КР"))
+                if (status.Contains("Марка") || status.Contains("согласован"))
                 {
                     buttonVisibility = false; order = 1;
                 }
@@ -135,8 +135,8 @@ namespace TNovTasks
             ElementId familyNameParamId = new ElementId(-1002002); //id параметра Имя семейства
             Guid adskGparamGuid = new Guid("3de5f1a4-d560-4fa8-a74f-25d250fb3401");//ADSK_Группирование
             Guid NTaskApprovedBIMParamGuid = new Guid("94587b6e-5bdd-4fe8-bea4-4996c32801c4");//N_Согласовано BIM
-            Guid NTaskApprovedSTParamGuid = new Guid("7cb33aa5-8106-4e4c-8038-6691e34f438c");//N_Согласовано КР
             //04.2026: параметр N_Согласовано рук исключен как устаревший, для совместимости заполняется как "1"
+            //10.2026: параметр N_Согласовано КР исключен, согласование только по N_Согласовано BIM
 
             List<Group> linkGroups = new FilteredElementCollector(linkDoc).OfCategory(BuiltInCategory.OST_IOSModelGroups)
                 .WhereElementIsNotElementType()
@@ -175,8 +175,6 @@ namespace TNovTasks
                     Element elem = linkDoc.GetElement(linkGroupElem);
                     string mrkvalue = elem.get_Parameter(mrk).AsValueString();
                     if (mrkvalue == null || mrkvalue == "") badElementIds += linkGroupElem.ToString() + " ";
-                    int linkElem_coordStatusST_int = elem.get_Parameter(NTaskApprovedSTParamGuid).AsInteger();
-                    if (linkElem_coordStatusST_int != 1) k++;
                     int linkElem_coordStatusBIM_int = elem.get_Parameter(NTaskApprovedBIMParamGuid).AsInteger();
                     if (linkElem_coordStatusBIM_int != 1) k++;
                 }
@@ -186,8 +184,6 @@ namespace TNovTasks
                     Element elem = linkDoc.GetElement(linkGroupElem);
                     string mrkvalue = elem.get_Parameter(mrk).AsValueString();
                     if (mrkvalue == null || mrkvalue == "") badElementIds += linkGroupElem.ToString() + " ";
-                    int linkElem_coordStatusST_int = elem.get_Parameter(NTaskApprovedSTParamGuid).AsInteger();
-                    if (linkElem_coordStatusST_int != 1) k++;
                     int linkElem_coordStatusBIM_int = elem.get_Parameter(NTaskApprovedBIMParamGuid).AsInteger();
                     if (linkElem_coordStatusBIM_int != 1) k++;
                 }
@@ -210,7 +206,7 @@ namespace TNovTasks
                 {
                     status = "Задание еще не вставлялось.";
                     if (badElementIds.Length > 0) status += " Не у всех элементов в задании заполнена позиция (Марка).";
-                    if (k > 0) status += " Не все элементы согласованы КР или BIM.";
+                    if (k > 0) status += " Не все элементы согласованы BIM.";
                     string groupText0 = shortName + "=" + status + "=" + gSet;
                     groupTxtList.Add(groupText0); Logger.Log(groupText0, 1);
                     continue;
@@ -243,7 +239,7 @@ namespace TNovTasks
                     }
                     if (i == 0) status = "Задание еще не вставлялось.";
                     if (badElementIds.Length > 0) status += " Не у всех элементов в задании заполнена позиция (Марка).";
-                    if (k > 0) status += " Не все элементы согласованы КР или BIM.";
+                    if (k > 0) status += " Не все элементы согласованы BIM.";
                     if (status == "") status = "Актуально.";
                     string groupText = shortName + "=" + status + "=" + gSet;
                     groupTxtList.Add(groupText); Logger.Log(groupText, 1);
@@ -284,8 +280,8 @@ namespace TNovTasks
             Guid adskHeightParamGuid = new Guid("da753fe3-ecfa-465b-9a2c-02f55d0c2ff1");//ADSK_Размер_Высота
             Guid adskLengthParamGuid = new Guid("748a2515-4cc9-4b74-9a69-339a8d65a212");//ADSK_Размер_Длина
             Guid NTaskApprovedBIMParamGuid = new Guid("94587b6e-5bdd-4fe8-bea4-4996c32801c4");//N_Согласовано BIM
-            Guid NTaskApprovedSTParamGuid = new Guid("7cb33aa5-8106-4e4c-8038-6691e34f438c");//N_Согласовано КР
             //04.2026: параметр N_Согласовано рук исключен как устаревший, для совместимости заполняется как "1"
+            //10.2026: параметр N_Согласовано КР исключен, согласование только по N_Согласовано BIM
 
             List<RevitLinkInstance> links = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_RvtLinks)
             .WhereElementIsNotElementType()
@@ -391,15 +387,9 @@ namespace TNovTasks
                                         linkElem_coordStatusBIM = "v";
                                         if (writeLogs) Logger.Log("   согласовано BIM", 2);
                                     }
+                                    else linkElem_status += "Не согласовано BIM. ";
 
-                                    string linkElem_coordStatusST = "-";
-                                    int linkElem_coordStatusST_int = linkElem.get_Parameter(NTaskApprovedSTParamGuid).AsInteger();
-                                    if (linkElem_coordStatusST_int == 1)
-                                    {
-                                        linkElem_coordStatusST = "v";
-                                        if (writeLogs) Logger.Log("   согласовано КР", 2);
-                                    }
-                                    else linkElem_status += "Не согласовано КР. ";
+                                    string linkElem_coordStatusST = "v"; //N_Согласовано КР исключен
 
                                     LocationPoint linkElem_lp = (LocationPoint)linkElem.Location;
                                     XYZ p = linkElem_lp.Point;
@@ -602,15 +592,9 @@ namespace TNovTasks
                                         linkElem_coordStatusBIM = "v";
                                         if (writeLogs) Logger.Log("   согласовано BIM", 2);
                                     }
+                                    else linkElem_status += "Не согласовано BIM. ";
 
-                                    string linkElem_coordStatusST = "-";
-                                    int linkElem_coordStatusST_int = linkElem.get_Parameter(NTaskApprovedSTParamGuid).AsInteger();
-                                    if (linkElem_coordStatusST_int == 1)
-                                    {
-                                        linkElem_coordStatusST = "v";
-                                        if (writeLogs) Logger.Log("   согласовано КР", 2);
-                                    }
-                                    else linkElem_status += "Не согласовано КР. ";
+                                    string linkElem_coordStatusST = "v"; //N_Согласовано КР исключен
 
                                     LocationPoint linkElem_lp = (LocationPoint)linkElem.Location;
                                     XYZ p = linkElem_lp.Point;
@@ -881,7 +865,7 @@ namespace TNovTasks
             foreach (var hole in holes)
             {
                 int holeorder = 0;
-                if (hole.status.Contains("КР")) holeorder = 4;
+                if (hole.status.Contains("согласован")) holeorder = 4;
                 else if (hole.status.Contains("Не вставлено.")) holeorder = 1;
                 else if (hole.status.Length == 0) holeorder = 5;
                 else if (hole.status.Contains("Лишнее отверстие")) holeorder = 2;
