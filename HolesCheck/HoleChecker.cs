@@ -65,7 +65,7 @@ namespace TNovTasks
     /// <summary>
     /// Проверка модели «Задания» по статье вики «Задания на отверстия»
     /// (раздел BIM / MEP) и чек-листу КР («ЧЕК-лист.Отверстия», Dynamo):
-    /// кратность 5 мм, сквозное прорезание с запасом 20 мм, дубли и
+    /// сквозное прорезание с запасом 20 мм, дубли и
     /// пересечения, сквозные марки по секции, имена групп
     /// «От кого_Кому.Назначение_Этаж», ADSK_Группирование, размноженные
     /// группы типовых этажей, сдвиг больше метра без новой марки.
@@ -73,8 +73,9 @@ namespace TNovTasks
     public static class HoleChecker
     {
         const double FtToMm = 304.8;
-        const double Module = 5.0;          // мм, модуль размеров и привязок
-        const double ModuleTol = 0.05;      // мм, допуск на кратность (шум double)
+        // Кратности 5 мм (размеры, привязки к осям и уровню) в проверке НЕТ —
+        // отзыв Виктора 21.10.2026: правило давало ложные ошибки, размеры и
+        // привязки отверстие получает от инженерной сети.
         const double ThroughMargin = 20.0;  // мм, запас прорезания с каждой стороны
         const double MarginTol = 0.5;       // мм
         const double ProbeHalfLength = 2000.0; // мм, щуп толщины конструкции в каждую сторону
@@ -163,20 +164,16 @@ namespace TNovTasks
             report.GroupCount = scope.Where(i => i.Group != null).Select(i => i.GroupName).Distinct().Count();
 
             var issues = report.Issues;
-            Step("Имена групп, размеры, параметры, марки", 0.15);
+            Step("Имена групп, параметры, марки", 0.15);
             CheckGroups(doc, all, scopeGroupTypes, issues);
             foreach (var it in scope)
             {
                 CheckMembership(it, issues);
-                CheckSizes(it, issues);
                 CheckParams(it, issues);
             }
             CheckFunctionMix(scope, issues);
             CheckMarks(all.Where(i => i.Primary).ToList(), inScope, issues);
 
-            // Привязка граней к осям и низа к уровню с кратностью 5 мм НЕ проверяется
-            // (отзыв Виктора 21.10.2026): привязку отверстие получает от инженерной
-            // сети, а не от сетки осей. Кратность 5 мм остаётся только у размеров.
             Step("Связи модели", 0.2);
             List<LinkCtx> links = GetLinks(doc);
 
@@ -546,26 +543,7 @@ namespace TNovTasks
             return p.AsDouble() * FtToMm;
         }
 
-        static bool Multiple(double mm) => Math.Abs(mm - Math.Round(mm / Module) * Module) <= ModuleTol;
         static string F(double mm) => mm.ToString(Math.Abs(mm - Math.Round(mm)) < 0.05 ? "0" : "0.#", CultureInfo.GetCultureInfo("ru-RU"));
-
-        static void CheckSizes(Item it, List<HoleIssue> issues)
-        {
-            var sizes = new List<KeyValuePair<string, double?>>();
-            double? d = Mm(it.Elem, DiameterGuid);
-            if (d.HasValue) sizes.Add(new KeyValuePair<string, double?>("диаметр", d));
-            else
-            {
-                sizes.Add(new KeyValuePair<string, double?>("ширина", Mm(it.Elem, HoleWidthGuid) ?? Mm(it.Elem, SizeWidthGuid)));
-                sizes.Add(new KeyValuePair<string, double?>("высота", Mm(it.Elem, HoleHeightGuid) ?? Mm(it.Elem, SizeHeightGuid)));
-            }
-            if (it.Kind != Kind.WallHole && it.Kind != Kind.FloorHole)
-                sizes.Add(new KeyValuePair<string, double?>("длина", Mm(it.Elem, SizeLengthGuid)));
-
-            var bad = sizes.Where(s => s.Value.HasValue && !Multiple(s.Value.Value)).Select(s => s.Key + " " + F(s.Value.Value)).ToList();
-            if (bad.Count > 0)
-                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Кратность 5 мм", "размер не кратен 5 мм: " + string.Join(", ", bad)));
-        }
 
         static List<LinkCtx> GetLinks(Document doc)
         {
