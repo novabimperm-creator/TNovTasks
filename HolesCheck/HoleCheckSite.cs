@@ -23,6 +23,45 @@ namespace TNovTasks
         public string Initiator { get; set; }
         public DateTime? TaskDate { get; set; }
         public SiteBimCheck BimCheck { get; set; }
+        public string ModelName { get; set; }
+        /// <summary>Проект на сайте. Старый сервер — null (проект берётся из CDE.txt).</summary>
+        public string ProjectName { get; set; }
+        /// <summary>Логин Revit того, кто выдал (Initiator в JSON плагина).</summary>
+        public string RevitInitiator { get; set; }
+        public string IssueHistory { get; set; }
+        /// <summary>Комментарий последней выдачи (MEPComments). Старый сервер — null.</summary>
+        public string LastIssueComment { get; set; }
+        /// <summary>Проверка со стороны КР: actual | outdated | null.</summary>
+        public string StStatus { get; set; }
+        public string StMisc { get; set; }
+        public string StModel { get; set; }
+        public DateTime? StCheckedAt { get; set; }
+        public int? StVersion { get; set; }
+
+        /// <summary>
+        /// Запись журнала сайта в форме JSON плагина — чтобы окна и сравнения,
+        /// написанные под JSON, работали с ней как есть.
+        /// </summary>
+        public HoleGroupBaseItem ToBaseItem()
+        {
+            string[] parts = (Name ?? "").Split('_');
+            return new HoleGroupBaseItem
+            {
+                HoleGroupName = Name,
+                HoleGroupNamePart1 = parts[0],
+                HoleGroupNamePart2 = parts.Length > 1 ? parts[1] : "",
+                HoleGroupNamePart3 = parts.Length > 2 ? parts[2] : "",
+                TaskVersion = Version > 0 ? Version.ToString() : "",
+                TaskDate = TaskDate.HasValue ? TaskDate.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : "",
+                Initiator = RevitInitiator ?? Initiator,
+                MEPComments = LastIssueComment,
+                IssueHistory = IssueHistory,
+                STStatus = StStatus == "actual" ? "Актуально" : StStatus == "outdated" ? "Неактуально" : null,
+                STMisc = StMisc,
+                STModelName = StModel,
+                STCheckDate = StCheckedAt.HasValue ? StCheckedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : null,
+            };
+        }
 
         public string StatusText => Status == "done" ? "Выполнено" : "Выдано в работу";
         public string DateText => TaskDate.HasValue ? TaskDate.Value.ToLocalTime().ToString("dd.MM.yy HH:mm") : "";
@@ -204,6 +243,93 @@ namespace TNovTasks
             };
             try { return Wait(work, "Загрузка заданий модели из TNovPRO…", null); }
             catch (OperationCanceledException) { return null; }
+        }
+
+        /// <summary>
+        /// Задания модели с сайта под окном ожидания, все страницы.
+        /// null — сайт недоступен или «Отмена»: вызывающий берёт JSON.
+        /// </summary>
+        public static List<SiteTask> LoadTasks(string modelName)
+        {
+            Func<Task<List<SiteTask>>> work = async () =>
+            {
+                var all = new List<SiteTask>();
+                for (int offset = 0; offset < 10000; offset += 500)
+                {
+                    var jo = JObject.Parse(await GetAsync("api/tasks?model=" + Uri.EscapeDataString(modelName ?? "")
+                        + "&limit=500&offset=" + offset));
+                    var arr = jo["tasks"] as JArray;
+                    if (arr != null) all.AddRange(arr.ToObject<List<SiteTask>>());
+                    // hasMore нет у сервера до 10.2026 — там и страниц нет
+                    if (jo["hasMore"]?.Type != JTokenType.Boolean || !(bool)jo["hasMore"]) break;
+                }
+                return all;
+            };
+            try { return Wait(work, "Загрузка заданий из TNovPRO…", null); }
+            catch (Exception ex)
+            {
+                TNovCommon.Logger.Log("TNovPRO: задания модели «" + modelName + "» не получены — " + ex.Message, 3);
+                return null;
+            }
+        }
+
+        /// <summary>Все задания журнала сайта (все модели) под окном ожидания. null — не получены.</summary>
+        public static List<SiteTask> LoadAllTasks()
+        {
+            Func<Task<List<SiteTask>>> work = async () =>
+            {
+                var all = new List<SiteTask>();
+                for (int offset = 0; offset < 100000; offset += 500)
+                {
+                    var jo = JObject.Parse(await GetAsync("api/tasks?limit=500&offset=" + offset));
+                    var arr = jo["tasks"] as JArray;
+                    if (arr != null) all.AddRange(arr.ToObject<List<SiteTask>>());
+                    if (jo["hasMore"]?.Type != JTokenType.Boolean || !(bool)jo["hasMore"]) break;
+                }
+                return all;
+            };
+            try { return Wait(work, "Загрузка журнала заданий из TNovPRO…", null); }
+            catch (Exception ex)
+            {
+                TNovCommon.Logger.Log("TNovPRO: журнал заданий не получен — " + ex.Message, 3);
+                return null;
+            }
+        }
+
+        /// <summary>Элементы заданий модели с сайта под окном ожидания. null — не получены.</summary>
+        public static List<HoleCheckHistoryItem> LoadElements(string modelName)
+        {
+            try { return Wait(() => LoadHistoryAsync(modelName), "Загрузка элементов заданий из TNovPRO…", null); }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>
+        /// Итог проверки КР («Задания от ИОС») пачкой: modelName — модель Заданий,
+        /// stModel — модель КР. null — принято, иначе текст ошибки (на сайте
+        /// до 10.2026 запроса нет — 404, это не повод мешать работе).
+        /// </summary>
+        public static string PostStCheck(string modelName, string stModel, IEnumerable<HoleGroupBaseItem> items)
+        {
+            var list = items.Select(i => new
+            {
+                name = i.HoleGroupName,
+                stStatus = i.STStatus == "Актуально" ? "actual" : "outdated",
+                stMisc = i.STMisc,
+                version = int.TryParse(i.TaskVersion, out int v) ? v : (int?)null,
+            }).ToList();
+            if (list.Count == 0) return null;
+            var body = new { modelName, stModel, items = list };
+            Func<Task<string>> work = async () =>
+            {
+                using (var resp = await SendAsync(() => Make(HttpMethod.Post, "api/tasks/st-check", body)))
+                {
+                    if (resp.IsSuccessStatusCode) return (string)null;
+                    string text = resp.Content != null ? await resp.Content.ReadAsStringAsync() : "";
+                    return "HTTP " + (int)resp.StatusCode + " " + (text.Length > 200 ? text.Substring(0, 200) : text);
+                }
+            };
+            try { return Wait(work, "Отправка проверки КР в TNovPRO…", null); }
+            catch (Exception ex) { return ex.Message; }
         }
 
         public static SiteMe GetMe() =>

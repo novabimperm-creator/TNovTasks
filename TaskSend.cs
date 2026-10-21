@@ -132,6 +132,25 @@ namespace TNovTasks
                                 ?? new List<HoleGroupBaseItem>();
             }
             string currentDateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+            // Журнал TNovPRO — основной источник версий и истории элементов (10.2026);
+            // JSON остаётся резервом и пишется как раньше. Сайт не ответил — по JSON.
+            Dictionary<string, int> siteVersions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            List<HoleCheckHistoryItem> siteHistory = null;
+            if (corp)
+            {
+                HoleCheckSite.Snapshot snap = HoleCheckSite.Load(docName);
+                if (snap == null) Logger.Log("TNovPRO: загрузка заданий отменена — версии по JSON", 3);
+                else
+                {
+                    foreach (var t in snap.Tasks ?? new List<SiteTask>())
+                        if (!string.IsNullOrEmpty(t.Name) && (!siteVersions.TryGetValue(t.Name, out int v0) || t.Version > v0))
+                            siteVersions[t.Name] = t.Version;
+                    siteHistory = snap.History;
+                    foreach (string note in snap.Notes) Logger.Log("TNovPRO: " + note, 3);
+                    Logger.Log("TNovPRO: заданий модели " + siteVersions.Count, 1);
+                }
+            }
             #endregion
 
             #region Проверка марок
@@ -151,6 +170,7 @@ namespace TNovTasks
                 TaskVersion = i.TaskVersion,
                 Elements = i.Elements,
             }).ToList();
+            history = HoleCheckSite.MergeHistory(siteHistory, history);
             if (!HoleCheckRunner.Run(uidoc, groupsList, history, true))
             {
                 Logger.Log("Проверка отверстий не пройдена или выдача отменена. Завершение работы", 3);
@@ -172,6 +192,7 @@ namespace TNovTasks
 
                 // Ищем запись с таким именем группы
                 HoleGroupBaseItem existingItem = existingItems.FirstOrDefault(item => item.HoleGroupName == groupName);
+                siteVersions.TryGetValue(groupName, out int siteVersion);
 
                 if (existingItem != null)
                 {
@@ -180,6 +201,8 @@ namespace TNovTasks
                         version++;
                     else
                         version = 2; // если строка не число, начинаем с 2
+                    // на сайте могли выдать версию, которой нет в JSON (запись на диск не прошла)
+                    if (siteVersion + 1 > version) version = siteVersion + 1;
 
                     existingItem.TaskVersion = version.ToString();
                     existingItem.TaskDate = currentDateTime;
@@ -190,11 +213,14 @@ namespace TNovTasks
                 }
                 else
                 {
-                    // Новая группа – создаём запись с версией "1"
+                    // Новая группа – создаём запись с версией "1" (или следующей за сайтом:
+                    // в JSON группы нет, а на сайте она уже выдавалась)
                     existingItems.Add(new HoleGroupBaseItem
                     {
                         HoleGroupName = groupName,
-                        TaskVersion = "1",
+                        TaskVersion = (siteVersion + 1).ToString(),
+                        // история элементов — с сайта, иначе сравнивать новую выдачу не с чем
+                        Elements = siteHistory?.FirstOrDefault(h => string.Equals(h.HoleGroupName, groupName, StringComparison.OrdinalIgnoreCase))?.Elements,
                         TaskDate = currentDateTime,
                         HoleGroupNamePart1 = pt1,
                         HoleGroupNamePart2 = pt2,

@@ -41,9 +41,14 @@ namespace TNovTasks
             int scenario = viewModel.scenario;
 
             var cardBrush = (Brush)FindResource("CardBrush");
-            var alertBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4A, 0x28, 0x28));
+            // Текст и фон строк — по теме: в светлой карточка белая, и белый текст
+            // строк на ней был не виден (окно показывало один заголовок)
+            bool lightTheme = cardBrush is SolidColorBrush cb && (cb.Color.R + cb.Color.G + cb.Color.B) > 3 * 128;
+            var alertBrush = lightTheme
+                ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF6, 0xD5, 0xD5))
+                : new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4A, 0x28, 0x28));
             var headerBrush = (Brush)FindResource("AccentBrush");
-            var cellBrush = Brushes.White;
+            var cellBrush = (Brush)FindResource("PrimaryTextBrush");
             var buttonStyle = (Style)FindResource("SecondaryButtonStyle");
 
             if (scenario == 2) replaceButton.Visibility = System.Windows.Visibility.Hidden;

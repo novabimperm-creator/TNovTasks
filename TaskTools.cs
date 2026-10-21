@@ -12,9 +12,32 @@ using TNovCommon;
 
 namespace TNovTasks
 {
+    /// <summary>
+    /// Связь с TNovPRO на время одной команды. Переходная схема (10.2026): сайт —
+    /// основной источник, JSON на сервере — резерв. Не вошли или сайт не ответил —
+    /// до конца команды работаем по JSON, не дёргая сайт на каждом окне.
+    /// </summary>
+    public sealed class TaskSiteLink
+    {
+        public bool Online;
+    }
+
     public class TaskTools
     {
-        public static List<HoleGroup> GetHoleGroups(in Document linkDoc, in Document doc, in string userName)
+        /// <summary>
+        /// Свежая из двух записей группы: сайт, если только JSON не ушёл вперёд по
+        /// версии (выдача прошла, когда сайт был недоступен).
+        /// </summary>
+        static HoleGroupBaseItem Fresher(HoleGroupBaseItem site, HoleGroupBaseItem json)
+        {
+            if (site == null) return json;
+            if (json == null) return site;
+            int.TryParse(site.TaskVersion, out int vs);
+            int.TryParse(json.TaskVersion, out int vj);
+            return vj > vs ? json : site;
+        }
+
+        public static List<HoleGroup> GetHoleGroups(in Document linkDoc, in Document doc, in string userName, TaskSiteLink site = null)
         {
             //подкласс 1
             string groups1 = TaskTools.GetGroupNames(linkDoc, doc);
@@ -38,6 +61,24 @@ namespace TNovTasks
                                 ?? new List<HoleGroupBaseItem>();
             }
 
+            // Журнал заданий TNovPRO — основной источник версий, дат и инициаторов
+            Dictionary<string, HoleGroupBaseItem> siteItems = null;
+            if (site != null && site.Online)
+            {
+                List<SiteTask> siteTasks = HoleCheckSite.LoadTasks(docName);
+                if (siteTasks == null) { site.Online = false; Logger.Log("TNovPRO недоступен — задания по JSON", 3); }
+                // Заданий модели на сайте нет (выдавались до TNovPRO) — работаем по JSON целиком
+                else if (siteTasks.Count == 0) Logger.Log("TNovPRO: заданий модели нет — задания по JSON", 3);
+                else
+                {
+                    siteItems = siteTasks.Where(t => !string.IsNullOrEmpty(t.Name))
+                        .GroupBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(g => g.Key, g => g.OrderBy(t => t.Number).Last().ToBaseItem(), StringComparer.OrdinalIgnoreCase);
+                    Logger.Log("TNovPRO: заданий модели " + siteItems.Count, 1);
+                }
+            }
+            List<HoleGroupBaseItem> stItems = new List<HoleGroupBaseItem>(); //итог проверки КР для сайта
+            string stModelName = null;
 
             foreach (string group in groups)
             {
@@ -64,11 +105,14 @@ namespace TNovTasks
                 string version = ""; string dateinitiator = ""; 
                 // Ищем запись с таким именем группы
                 HoleGroupBaseItem existingItem = existingItems.FirstOrDefault(item => item.HoleGroupName == nameParts[0]);
-                if (existingItem != null)
+                HoleGroupBaseItem siteItem = null;
+                if (siteItems != null) siteItems.TryGetValue(nameParts[0], out siteItem);
+                HoleGroupBaseItem shownItem = Fresher(siteItem, existingItem);
+                if (shownItem != null)
                 {
                     //считываем данные из базы
-                    version = existingItem.TaskVersion; 
-                    dateinitiator = existingItem.TaskDate + " " + existingItem.Initiator;
+                    version = shownItem.TaskVersion;
+                    dateinitiator = shownItem.TaskDate + " " + shownItem.Initiator;
 
                     if (status.Contains("не вставлялось")) { }
                     else
@@ -76,27 +120,44 @@ namespace TNovTasks
                         string docName1 = doc.Title.ToString();
                         docName1 = docName1.Replace(",", " "); docName1 = TNovCommon.ModelName.StripUserSuffix(docName1, userName);
                         if (docName1.Contains("отсоед")) { }
-                        else 
+                        else
                         {
-                            //обновляем атрибуты в базе
-                            existingItem.STModelName = docName1;
+                            string stStatus = null, stMisc = null;
                             switch (order)
                             {
                                 case 0:
-                                    existingItem.STStatus = "Неактуально";
-                                    existingItem.STMisc = "См. детальный анализ в модели КР";
+                                    stStatus = "Неактуально";
+                                    stMisc = "См. детальный анализ в модели КР";
                                     break;
                                 case 1:
-                                    existingItem.STStatus = "Неактуально";
-                                    existingItem.STMisc = "В модели Заданий не заполнены марки или не согласованы элементы задания";
+                                    stStatus = "Неактуально";
+                                    stMisc = "В модели Заданий не заполнены марки или не согласованы элементы задания";
                                     break;
                                 case 3:
-                                    existingItem.STStatus = "Актуально"; existingItem.STMisc = ""; break;
+                                    stStatus = "Актуально"; stMisc = ""; break;
                             }
                             string currentDateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                            existingItem.STCheckDate = currentDateTime;
+                            //обновляем атрибуты в базе
+                            if (existingItem != null)
+                            {
+                                existingItem.STModelName = docName1;
+                                if (stStatus != null) { existingItem.STStatus = stStatus; existingItem.STMisc = stMisc; }
+                                existingItem.STCheckDate = currentDateTime;
+                            }
+                            //и на сайте - только по заданиям, которые там есть
+                            if (siteItem != null && stStatus != null)
+                            {
+                                stModelName = docName1;
+                                stItems.Add(new HoleGroupBaseItem
+                                {
+                                    HoleGroupName = siteItem.HoleGroupName,
+                                    TaskVersion = shownItem.TaskVersion,
+                                    STStatus = stStatus,
+                                    STMisc = stMisc,
+                                });
+                            }
                         }
-                        
+
                     }
                 }
 
@@ -124,6 +185,12 @@ namespace TNovTasks
             catch (Exception ex)
             {
                 //new InfoWindow280($"Ошибка записи в базу: {ex.Message}. Попробуйте, пожалуйста, повторить.").ShowDialog();
+            }
+            if (siteItems != null && stItems.Count > 0)
+            {
+                string stError = HoleCheckSite.PostStCheck(docName, stModelName, stItems);
+                if (stError != null) Logger.Log("TNovPRO: проверка КР не отправлена — " + stError, 3);
+                else Logger.Log("TNovPRO: проверка КР отправлена, групп " + stItems.Count, 1);
             }
             holeGroups = holeGroups.OrderBy(h => h.Order).ToList();
             return holeGroups;

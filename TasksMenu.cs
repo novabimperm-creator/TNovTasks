@@ -121,12 +121,24 @@ namespace TNovTasks
 
             #endregion
 
+            #region Авторизация в TNovPRO
+            // Переходная схема (10.2026): задания читаем из TNovPRO, проверку КР
+            // пишем туда же. Вход необязателен: не вошли — работаем по JSON на сервере.
+            TaskSiteLink site = new TaskSiteLink();
+            if (config != null && CorpGate.IsCorp(config))
+            {
+                Logger.Log("TNovPRO: проверка входа", 1);
+                site.Online = HoleCheckSite.EnsureAuth();
+                Logger.Log(site.Online ? "TNovPRO: сессия готова" : "TNovPRO: вход не выполнен — задания по JSON", site.Online ? 1 : 3);
+            }
+            #endregion
+
             #region Основной цикл
             bool showFirstWindow = true;
 
             while (showFirstWindow)
             {
-                List<HoleGroup> holeGroups = TaskTools.GetHoleGroups(linkDoc, doc, userName); 
+                List<HoleGroup> holeGroups = TaskTools.GetHoleGroups(linkDoc, doc, userName, site);
 
                 Logger.Log("Стартовое окно", 1);
 
@@ -155,7 +167,8 @@ namespace TNovTasks
                         while (ShowDetailsWindow)
                         {
                             //подкласс 2
-                            List<Hole> holes = TaskTools.HolesInGroup(linkDoc, doc, groupName, false);
+                            List<Hole> holes = TaskTools.HolesInGroup(linkDoc, doc, groupName, true);
+                            Logger.Log("Детальный анализ «" + groupName + "»: элементов " + holes.Count, 1);
 
                             var holes1 = holes.OrderBy(h => h.holeorder)
                                 .ThenBy(h => h.mark)
