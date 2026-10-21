@@ -45,10 +45,8 @@ namespace TNovTasks
         public string MEPComments { get; set; }
         public string MEPCommentsHistory { get; set; }
         /// <summary>Кто и когда выдавал каждую версию: «v3: 2026-10-07 14:03:11 ivanov; v4: …».</summary>
-        [TasksPro.ProIgnore]
         public string IssueHistory { get; set; }
         /// <summary>Элементы группы на момент последней выдачи, с историей изменений.</summary>
-        [TasksPro.ProIgnore]
         public List<TNovCommon.TaskElementRecord> Elements { get; set; }
         [JsonIgnore]
         public string NewComment { get; set; }
