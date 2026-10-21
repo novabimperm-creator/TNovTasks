@@ -174,11 +174,11 @@ namespace TNovTasks
             CheckFunctionMix(scope, issues);
             CheckMarks(all.Where(i => i.Primary).ToList(), inScope, issues);
 
-            Step("Оси из модели и связей", 0.2);
+            // Привязка граней к осям и низа к уровню с кратностью 5 мм НЕ проверяется
+            // (отзыв Виктора 21.10.2026): привязку отверстие получает от инженерной
+            // сети, а не от сетки осей. Кратность 5 мм остаётся только у размеров.
+            Step("Связи модели", 0.2);
             List<LinkCtx> links = GetLinks(doc);
-            List<Line> grids = GetGrids(doc, links);
-            if (grids.Count == 0) report.Skipped.Add("привязки к осям — в модели и связях нет осей");
-            Each(scope, "Привязки к осям", 0.22, 0.3, it => CheckBindings(doc, it, grids, issues));
 
             if (links.Count == 0)
                 report.Skipped.Add("прорезание и низ рам — не загружены связи КЖ/АР");
@@ -581,78 +581,6 @@ namespace TNovTasks
             return result;
         }
 
-        /// <summary>Прямые оси модели и связей — в координатах модели.</summary>
-        static List<Line> GetGrids(Document doc, List<LinkCtx> links)
-        {
-            var lines = new List<Line>();
-            void add(Document d, Transform t)
-            {
-                foreach (Grid g in new FilteredElementCollector(d).OfClass(typeof(Grid)).Cast<Grid>())
-                {
-                    if (!(g.Curve is Line l)) continue;
-                    Line w = t == null ? l : (Line)l.CreateTransformed(t);
-                    // Одинаковые оси модели и связи не дублируем
-                    if (!lines.Any(x => x.Direction.CrossProduct(w.Direction).GetLength() < 1e-6 && x.Distance(w.Origin) < 1e-4))
-                        lines.Add(w);
-                }
-            }
-            add(doc, null);
-            foreach (var lc in links) add(lc.Doc, lc.T);
-            return lines;
-        }
-
-        /// <summary>
-        /// Привязка граней к осям кратна 5 мм. Ось берётся ближайшая параллельная грани.
-        /// Отверстия в стенах по глубине не проверяются (исключение чек-листа КР).
-        /// </summary>
-        static void CheckBindings(Document doc, Item it, List<Line> grids, List<HoleIssue> issues)
-        {
-            if (it.Solids.Count == 0) return;
-            var bad = new List<string>();
-            XYZ[] axes = { it.T.BasisX, it.T.BasisY };
-            int depthAxis = it.Kind == Kind.WallHole ? WallDepthAxis(it) : -1;
-
-            for (int a = 0; a < 2; a++)
-            {
-                if (a == depthAxis) continue;
-                XYZ ax = new XYZ(axes[a].X, axes[a].Y, 0);
-                if (ax.GetLength() < 1e-6) continue;
-                ax = ax.Normalize();
-                double faceMin = it.T.Origin.DotProduct(ax) + it.Min[a];
-                Line best = null; double bestOff = double.MaxValue;
-                foreach (Line g in grids)
-                {
-                    XYZ gd = new XYZ(g.Direction.X, g.Direction.Y, 0);
-                    if (gd.GetLength() < 1e-6 || Math.Abs(gd.Normalize().DotProduct(ax)) > 1e-4) continue; // ось не параллельна грани
-                    double off = faceMin - g.Origin.DotProduct(ax);
-                    if (Math.Abs(off) < Math.Abs(bestOff)) { bestOff = off; best = g; }
-                }
-                if (best == null) continue;
-                double mm = Math.Abs(bestOff) * FtToMm;
-                if (!Multiple(mm)) bad.Add("до оси " + GridName(doc, best) + " " + F(mm));
-            }
-
-            if (it.Kind == Kind.WallHole || it.Kind == Kind.Frame)
-            {
-                if (doc.GetElement(it.Elem.LevelId) is Level lvl)
-                {
-                    double bottom = it.T.Origin.Z + Math.Min(it.Min[2], it.Max[2]);
-                    double mm = (bottom - lvl.Elevation) * FtToMm;
-                    if (!Multiple(mm)) bad.Add("низ от уровня «" + lvl.Name + "» " + F(mm));
-                }
-            }
-
-            if (bad.Count > 0)
-                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Кратность 5 мм", "привязка не кратна 5 мм: " + string.Join("; ", bad) + " (скрипт «Отверстия. Привязки 5» — до сборки в группы)"));
-        }
-
-        static string GridName(Document doc, Line l)
-        {
-            // имя оси держим по совпадению линии: Line не знает, чьей оси он копия
-            foreach (Grid g in new FilteredElementCollector(doc).OfClass(typeof(Grid)).Cast<Grid>())
-                if (g.Curve is Line gl && gl.Direction.CrossProduct(l.Direction).GetLength() < 1e-6 && gl.Distance(l.Origin) < 1e-4) return "«" + g.Name + "»";
-            return "(из связи)";
-        }
 
         /// <summary>
         /// Какая из горизонтальных осей отверстия в стене — глубина: та, чей
