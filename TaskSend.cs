@@ -142,6 +142,22 @@ namespace TNovTasks
                 return Result.Cancelled;
             #endregion
 
+            #region Проверка по правилам заданий
+            // Правила статьи вики «Задания на отверстия»: с ошибками не выдаём,
+            // с предупреждениями — по решению выдающего.
+            var history = existingItems.Select(i => new HoleCheckHistoryItem
+            {
+                HoleGroupName = i.HoleGroupName,
+                TaskVersion = i.TaskVersion,
+                Elements = i.Elements,
+            }).ToList();
+            if (!HoleCheckRunner.Run(uidoc, groupsList, history, true))
+            {
+                Logger.Log("Проверка отверстий не пройдена или выдача отменена. Завершение работы", 3);
+                return Result.Cancelled;
+            }
+            #endregion
+
             #region Сбор данных
             foreach (Group group in groupsList)
             {

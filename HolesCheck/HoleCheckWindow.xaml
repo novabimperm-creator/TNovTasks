@@ -1,0 +1,485 @@
+<Window x:Class="TNovTasks.HoleCheckWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Проверка задания на отверстия"
+        Height="740"
+        Width="1260"
+        MinHeight="480"
+        MinWidth="940"
+        WindowStartupLocation="CenterOwner"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="CanResizeWithGrip"
+        WindowStyle="None">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="HoleCheckStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Карточка-счётчик; у ошибок и предупреждений она же фильтр -->
+            <Style x:Key="StatCardStyle" TargetType="ToggleButton">
+                <Setter Property="Background" Value="{StaticResource CardBrush}"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Margin" Value="0,0,10,0"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ToggleButton">
+                            <Border x:Name="b" CornerRadius="10" Padding="14,10"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1.5">
+                                <ContentPresenter/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="False">
+                                    <Setter TargetName="b" Property="Opacity" Value="0.45"/>
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="{StaticResource SubtleHoverBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="StatNumberStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="24"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+                <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
+            </Style>
+            <Style x:Key="StatLabelStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+                <Setter Property="Margin" Value="0,1,0,0"/>
+            </Style>
+
+            <!-- Вкладки «Элементы» / «Замечания» -->
+            <Style x:Key="TabStyle" TargetType="RadioButton">
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Margin" Value="0,0,4,0"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="b" CornerRadius="8" Padding="14,7" Background="Transparent">
+                                <ContentPresenter/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="{StaticResource RowHoverBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="{StaticResource CardBrush}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Список фильтров слева: правила и группы -->
+            <Style x:Key="SideListStyle" TargetType="ListBox">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+                <Setter Property="ItemContainerStyle">
+                    <Setter.Value>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="b" CornerRadius="7" Padding="10,6" Margin="0,0,0,2" Background="Transparent">
+                                            <ContentPresenter/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="b" Property="Background" Value="{StaticResource RowHoverBrush}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="b" Property="Background" Value="{StaticResource SelectedBrush}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="ItemTemplate">
+                    <Setter.Value>
+                        <DataTemplate>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Name}" Foreground="{StaticResource PrimaryTextBrush}"
+                                           FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+                                <Border Grid.Column="1" CornerRadius="8" Padding="7,1" Margin="8,0,0,0"
+                                        Background="{StaticResource BgBrush}" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Count}" Foreground="{StaticResource MutedBrush}"
+                                               FontSize="11" FontWeight="SemiBold"/>
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="SideHeaderStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+                <Setter Property="Margin" Value="10,0,0,6"/>
+            </Style>
+
+            <Style x:Key="ReworkButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                <Setter Property="Background" Value="{StaticResource ErrBgBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource ErrBrush}"/>
+                <Setter Property="Padding" Value="16,9"/>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Opacity" Value="0.4"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- Метка важности в строке таблицы: Kind 0 — ошибка, 1 — внимание, 2 — ОК -->
+            <DataTemplate x:Key="KindPill">
+                <Border CornerRadius="9" Padding="8,2" HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{StaticResource ErrBgBrush}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Kind}" Value="1">
+                                    <Setter Property="Background" Value="{StaticResource WarnBgBrush}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Kind}" Value="2">
+                                    <Setter Property="Background" Value="{StaticResource OkBgBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="{Binding KindText}" FontSize="11" FontWeight="SemiBold">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource ErrBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Kind}" Value="1">
+                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Kind}" Value="2">
+                                        <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Border>
+            </DataTemplate>
+
+            <DataTemplate x:Key="BimCell">
+                <TextBlock Text="{Binding BimText}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           FontWeight="Bold" ToolTip="{Binding BimHint}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding BimText}" Value="✓">
+                                    <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </DataTemplate>
+
+            <DataTemplate x:Key="MarkCell">
+                <TextBlock Text="{Binding Mark}" FontWeight="Bold" FontSize="13"
+                           Foreground="{StaticResource PrimaryTextBrush}" VerticalAlignment="Center"
+                           ToolTip="{Binding IdText}"/>
+            </DataTemplate>
+
+            <Style x:Key="WrapText" TargetType="TextBlock">
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
+                <Setter Property="Margin" Value="0,4"/>
+                <Setter Property="LineHeight" Value="17"/>
+            </Style>
+            <Style x:Key="MutedText" TargetType="TextBlock" BasedOn="{StaticResource DarkDataGridTextElementStyle}">
+                <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="44" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="12"/>
+    </WindowChrome.WindowChrome>
+
+    <Border CornerRadius="12" Background="{StaticResource BgBrush}"
+            BorderBrush="{StaticResource AccentBrush}" BorderThickness="1">
+        <Grid>
+        <Grid Margin="20,14,20,18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Шапка -->
+            <Grid Grid.Row="0" Margin="0,0,0,14" Background="Transparent" MouseDown="TitleBar_MouseDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Проверка задания на отверстия" Foreground="{StaticResource AccentBrush}"
+                               FontSize="19" FontWeight="Bold"/>
+                    <TextBlock x:Name="SubtitleText" Foreground="{StaticResource MutedBrush}" FontSize="12"
+                               Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="?" Width="30" Height="30" Margin="0,0,6,0" VerticalAlignment="Top"
+                        Style="{StaticResource CloseButtonStyleMini}" Click="HelpButton_Click"
+                        ToolTip="Правила — статья вики «Задания на отверстия»"
+                        WindowChrome.IsHitTestVisibleInChrome="True"/>
+                <Button Grid.Column="2" Content="✕" Width="30" Height="30" VerticalAlignment="Top"
+                        Style="{StaticResource CloseButtonStyleMini}" Click="CloseButton_Click"
+                        WindowChrome.IsHitTestVisibleInChrome="True"/>
+            </Grid>
+
+            <!-- Счётчики -->
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
+                <ToggleButton Style="{StaticResource StatCardStyle}" IsChecked="True" IsHitTestVisible="False" MinWidth="150">
+                    <StackPanel>
+                        <TextBlock x:Name="ElementsNum" Style="{StaticResource StatNumberStyle}"/>
+                        <TextBlock x:Name="ElementsLbl" Style="{StaticResource StatLabelStyle}"/>
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton x:Name="ShowErrors" Style="{StaticResource StatCardStyle}" IsChecked="True"
+                              BorderBrush="{StaticResource ErrBrush}" MinWidth="150" Click="Filter_Click"
+                              ToolTip="Показать или скрыть ошибки">
+                    <StackPanel>
+                        <TextBlock x:Name="ErrorsNum" Style="{StaticResource StatNumberStyle}" Foreground="{StaticResource ErrBrush}"/>
+                        <TextBlock x:Name="ErrorsLbl" Style="{StaticResource StatLabelStyle}"/>
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton x:Name="ShowWarnings" Style="{StaticResource StatCardStyle}" IsChecked="True"
+                              BorderBrush="{StaticResource WarnBrush}" MinWidth="150" Click="Filter_Click"
+                              ToolTip="Показать или скрыть предупреждения">
+                    <StackPanel>
+                        <TextBlock x:Name="WarningsNum" Style="{StaticResource StatNumberStyle}" Foreground="{StaticResource WarnBrush}"/>
+                        <TextBlock x:Name="WarningsLbl" Style="{StaticResource StatLabelStyle}"/>
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton x:Name="ShowClean" Style="{StaticResource StatCardStyle}" IsChecked="True"
+                              BorderBrush="{StaticResource AccentBrush}" MinWidth="150" Click="Filter_Click"
+                              ToolTip="Показать или скрыть элементы без замечаний (вкладка «Элементы»)">
+                    <StackPanel>
+                        <TextBlock x:Name="CleanNum" Style="{StaticResource StatNumberStyle}" Foreground="{StaticResource AccentBrush}"/>
+                        <TextBlock Text="без замечаний" Style="{StaticResource StatLabelStyle}"/>
+                    </StackPanel>
+                </ToggleButton>
+            </StackPanel>
+
+            <!-- Что не проверялось -->
+            <Border Grid.Row="2" x:Name="SkippedPanel" CornerRadius="8" Padding="12,8" Margin="0,0,0,12"
+                    Background="{StaticResource WarnBgBrush}">
+                <DockPanel>
+                    <TextBlock Text="!" DockPanel.Dock="Left" FontWeight="Bold" FontSize="13"
+                               Foreground="{StaticResource WarnBrush}" Margin="2,0,10,0"/>
+                    <TextBlock x:Name="SkippedText" Foreground="{StaticResource PrimaryTextBrush}" FontSize="12" TextWrapping="Wrap"/>
+                </DockPanel>
+            </Border>
+
+            <!-- Вкладки -->
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="262,0,0,8">
+                <RadioButton x:Name="TabElements" Style="{StaticResource TabStyle}" IsChecked="True" Click="Tab_Click">
+                    <TextBlock x:Name="TabElementsText" Text="Элементы"/>
+                </RadioButton>
+                <RadioButton x:Name="TabIssues" Style="{StaticResource TabStyle}" Click="Tab_Click">
+                    <TextBlock x:Name="TabIssuesText" Text="Замечания"/>
+                </RadioButton>
+            </StackPanel>
+
+            <!-- Фильтры слева + таблица -->
+            <Grid Grid.Row="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="SideColumn" Width="250"/>
+                    <ColumnDefinition x:Name="SideGap" Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border x:Name="SidePanel" Background="{StaticResource CardBrush}" CornerRadius="10" Padding="6,12,6,8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="ГРУППЫ" Style="{StaticResource SideHeaderStyle}"/>
+                        <ListBox Grid.Row="1" x:Name="GroupsList" Style="{StaticResource SideListStyle}" MaxHeight="260"
+                                 SelectionChanged="SideList_SelectionChanged" Margin="0,0,0,12"/>
+                        <TextBlock Grid.Row="2" Text="ПРАВИЛА" Style="{StaticResource SideHeaderStyle}"/>
+                        <ListBox Grid.Row="3" x:Name="RulesList" Style="{StaticResource SideListStyle}"
+                                 SelectionChanged="SideList_SelectionChanged"/>
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Column="2">
+                    <!-- Все элементы задания -->
+                    <DataGrid x:Name="ElementsGrid"
+                              Style="{StaticResource DarkDataGridStyle}"
+                              ColumnHeaderStyle="{StaticResource DarkDataGridColumnHeaderStyle}"
+                              CellStyle="{StaticResource DarkDataGridCellStyle}"
+                              AlternatingRowBackground="{StaticResource CardBrush}"
+                              AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                              SelectionMode="Extended" HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal" BorderThickness="0" RowHeaderWidth="0"
+                              SelectionChanged="Grid_SelectionChanged"
+                              MouseDoubleClick="Grid_MouseDoubleClick">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="" Width="96" SortMemberPath="Kind" CellTemplate="{StaticResource KindPill}"/>
+                            <DataGridTemplateColumn Header="Марка" Width="70" SortMemberPath="MarkSort" CellTemplate="{StaticResource MarkCell}"/>
+                            <DataGridTextColumn Header="Группа" Binding="{Binding Group}" Width="190"
+                                                ElementStyle="{StaticResource DarkDataGridTextElementStyle}"/>
+                            <DataGridTextColumn Header="Семейство" Binding="{Binding Family}" Width="170"
+                                                ElementStyle="{StaticResource MutedText}"/>
+                            <DataGridTextColumn Header="Замечания" Binding="{Binding IssueText}" Width="*"
+                                                ElementStyle="{StaticResource WrapText}"/>
+                            <DataGridTemplateColumn x:Name="ElBimColumn" Header="BIM" Width="56" SortMemberPath="BimText" CellTemplate="{StaticResource BimCell}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Замечания по одному -->
+                    <DataGrid x:Name="IssuesGrid" Visibility="Hidden"
+                              Style="{StaticResource DarkDataGridStyle}"
+                              ColumnHeaderStyle="{StaticResource DarkDataGridColumnHeaderStyle}"
+                              CellStyle="{StaticResource DarkDataGridCellStyle}"
+                              AlternatingRowBackground="{StaticResource CardBrush}"
+                              AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                              SelectionMode="Extended" HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal" BorderThickness="0" RowHeaderWidth="0"
+                              SelectionChanged="Grid_SelectionChanged"
+                              MouseDoubleClick="Grid_MouseDoubleClick">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="" Width="96" SortMemberPath="Kind" CellTemplate="{StaticResource KindPill}"/>
+                            <DataGridTemplateColumn Header="Марка" Width="70" SortMemberPath="MarkSort" CellTemplate="{StaticResource MarkCell}"/>
+                            <DataGridTextColumn Header="Группа" Binding="{Binding Issue.GroupName}" Width="190"
+                                                ElementStyle="{StaticResource DarkDataGridTextElementStyle}"/>
+                            <DataGridTextColumn Header="Правило" Binding="{Binding Issue.Rule}" Width="130"
+                                                ElementStyle="{StaticResource DarkDataGridTextElementStyle}"/>
+                            <DataGridTextColumn Header="Что не так" Binding="{Binding Issue.Text}" Width="*"
+                                                ElementStyle="{StaticResource WrapText}"/>
+                            <DataGridTemplateColumn x:Name="BimColumn" Header="BIM" Width="56" SortMemberPath="BimText" CellTemplate="{StaticResource BimCell}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Пусто: замечаний нет или всё отфильтровано -->
+                    <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                        <Border Width="56" Height="56" CornerRadius="28" Background="{StaticResource OkBgBrush}" HorizontalAlignment="Center">
+                            <TextBlock Text="✓" FontSize="28" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock x:Name="EmptyText" Foreground="{StaticResource PrimaryTextBrush}" FontSize="15" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <!-- Действия с моделью -->
+            <Grid Grid.Row="5" Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Button x:Name="ShowButton" Content="Показать в модели" Style="{StaticResource GhostButtonStyle}"
+                        Margin="0,0,8,0" Click="ShowButton_Click" IsEnabled="False"
+                        ToolTip="Выделить элементы выбранных строк и приблизить к ним (двойной щелчок по строке — то же)"/>
+                <Button Grid.Column="1" Content="Подкрасить на виде" Style="{StaticResource GhostButtonStyle}"
+                        Margin="0,0,8,0" Click="PaintButton_Click"
+                        ToolTip="Подкрасить на активном виде элементы с замечаниями: ошибки — красным, предупреждения — жёлтым"/>
+                <Button Grid.Column="2" Content="Снять подкраску" Style="{StaticResource GhostButtonStyle}"
+                        Margin="0,0,8,0" Click="UnpaintButton_Click"/>
+                <Button Grid.Column="3" x:Name="RecheckButton" Content="↻ Перепроверить" Style="{StaticResource GhostButtonStyle}"
+                        Click="RecheckButton_Click" Visibility="Collapsed"
+                        ToolTip="Проверить заново — после правок в модели"/>
+                <TextBlock Grid.Column="4" x:Name="SelectionText" Foreground="{StaticResource MutedBrush}" FontSize="12"
+                           VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,14,0"/>
+                <Button Grid.Column="5" x:Name="CloseButton" Content="Закрыть" Style="{StaticResource GhostButtonStyle}"
+                        Click="CloseButton_Click"/>
+                <Button Grid.Column="6" x:Name="SendButton" Content="Выдать задание" Style="{StaticResource PrimaryButtonStyle}"
+                        Margin="8,0,0,0" Visibility="Collapsed" Click="SendButton_Click"/>
+            </Grid>
+
+            <!-- Решение BIM: только для отдела BIM -->
+            <Border Grid.Row="6" x:Name="ApprovePanel" Visibility="Collapsed"
+                    Margin="0,14,0,0" Padding="16,12" CornerRadius="10"
+                    Background="{StaticResource CardBrush}" BorderBrush="{StaticResource SelectedBrush}" BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="260"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
+                        <DockPanel>
+                            <TextBlock Text="РЕШЕНИЕ BIM" Foreground="{StaticResource AccentBrush}" FontWeight="Bold" FontSize="12"/>
+                            <TextBlock x:Name="ApprovedNum" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                       Foreground="{StaticResource PrimaryTextBrush}" FontWeight="SemiBold" FontSize="12"/>
+                        </DockPanel>
+                        <ProgressBar x:Name="ApprovedBar" Style="{StaticResource DarkProgressBarStyle}" Height="10"
+                                     Minimum="0" Maximum="1" Margin="0,8,0,0"/>
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="1" x:Name="ApproveText" Foreground="{StaticResource PrimaryTextBrush}"
+                               FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"/>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                        <Button x:Name="RevokeButton" Content="Снять с выбранных" Style="{StaticResource GhostButtonStyle}"
+                                Margin="0,0,8,0" Click="RevokeSelected_Click" IsEnabled="False"/>
+                        <Button x:Name="ApproveSelButton" Content="Согласовать выбранные" Style="{StaticResource GhostButtonStyle}"
+                                Margin="0,0,16,0" Click="ApproveSelected_Click" IsEnabled="False"
+                                ToolTip="Согласовать элементы выбранных строк (элементы с ошибками не согласуются)"/>
+                        <Button x:Name="ReworkButton" Content="На доработку…" Style="{StaticResource ReworkButtonStyle}"
+                                Margin="0,0,8,0" Click="Rework_Click"
+                                ToolTip="Снять согласование с элементов с ошибками и отправить задание на доработку с причиной — на сайт от вашего имени"/>
+                        <Button x:Name="AcceptButton" Content="Принять задание" Style="{StaticResource PrimaryButtonStyle}"
+                                Click="Accept_Click"
+                                ToolTip="Согласовать все элементы в Revit и отметить задание на сайте «Принято BIM» — одной кнопкой"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Пока Revit выполняет действие, окно не трогаем -->
+        <Border x:Name="BusyOverlay" Visibility="Collapsed" CornerRadius="12" Background="#99000000">
+            <Border CornerRadius="10" Padding="22,16" Background="{StaticResource CardBrush}"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock x:Name="BusyText" Foreground="{StaticResource PrimaryTextBrush}" FontSize="14" FontWeight="SemiBold"/>
+            </Border>
+        </Border>
+        </Grid>
+    </Border>
+</Window>

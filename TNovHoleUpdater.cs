@@ -381,6 +381,10 @@ namespace TNovTasks
         /// </summary>
         internal static string GetUserDepartment(Autodesk.Revit.ApplicationServices.Application app)
         {
+            // Согласование по отчёту «Проверки отверстий»: роль BIM подтвердил сайт
+            // TNovPRO, флаг стоит только на время этой транзакции.
+            if (HoleCheckRunner.SiteBimApproval) return "BIM";
+
             DateTime nowUtc = DateTime.UtcNow;
             if (nowUtc - _roleCheckedUtc < RoleCheckInterval) return _userDepartment;
             _roleCheckedUtc = nowUtc;

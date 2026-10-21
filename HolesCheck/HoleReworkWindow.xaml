@@ -1,0 +1,43 @@
+<Window x:Class="TNovTasks.HoleReworkWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="На доработку"
+        Width="560"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStyle="None">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="HoleCheckStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border CornerRadius="12" Background="{StaticResource BgBrush}" BorderBrush="{StaticResource ErrBrush}"
+            BorderThickness="1" Margin="8" MouseDown="Border_MouseDown">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.45"/>
+        </Border.Effect>
+        <StackPanel Margin="20,16,20,18">
+            <TextBlock Text="Отправить на доработку" Foreground="{StaticResource ErrBrush}" FontSize="17" FontWeight="Bold"/>
+            <TextBlock Style="{StaticResource DialogHintStyle}" Margin="0,4,0,12"
+                       Text="Причина уйдёт на сайт от вашего имени — в ленту задания, инициатору и ответственному. Согласование с элементов с ошибками снимется в Revit. Список замечаний проверки приложится сам."/>
+            <TextBox x:Name="ReasonBox" Style="{StaticResource DarkTextBoxStyle}" Height="170" Padding="10,8"
+                     AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top" FontSize="13"
+                     TextChanged="ReasonBox_TextChanged"/>
+            <TextBlock x:Name="HintText" Style="{StaticResource DialogHintStyle}" Margin="0,6,0,0"
+                       Foreground="{StaticResource ErrBrush}" Text="Напишите причину — без неё на доработку не отправить."/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                <Button Content="Отмена" Style="{StaticResource GhostButtonStyle}" Margin="0,0,8,0" Click="Cancel_Click" IsCancel="True"/>
+                <Button x:Name="SendButton" Content="Отправить на доработку" Style="{StaticResource PrimaryButtonStyle}"
+                        Background="{StaticResource ErrBrush}" Click="Send_Click"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

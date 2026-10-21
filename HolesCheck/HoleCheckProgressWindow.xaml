@@ -1,0 +1,45 @@
+<Window x:Class="TNovTasks.HoleCheckProgressWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Проверка отверстий"
+        Width="460"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStyle="None">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="HoleCheckStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border CornerRadius="12" Background="{StaticResource BgBrush}"
+            BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" Margin="8">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.45"/>
+        </Border.Effect>
+        <StackPanel Margin="20,18,20,20">
+            <TextBlock Text="ПРОВЕРКА ОТВЕРСТИЙ" Foreground="{StaticResource AccentBrush}"
+                       FontSize="15" FontWeight="Bold"/>
+            <TextBlock x:Name="ScopeText" Style="{StaticResource DialogHintStyle}" Margin="0,2,0,14"/>
+            <TextBlock x:Name="StepText" Style="{StaticResource DialogMessageStyle}" Margin="0,0,0,10"
+                       Text="Подготовка…"/>
+            <Grid>
+                <ProgressBar x:Name="Bar" Style="{StaticResource DarkProgressBarStyle}"
+                             Minimum="0" Maximum="1" Height="22"/>
+                <TextBlock x:Name="PercentText" Style="{StaticResource DarkProgressBarLabelStyle}"
+                           FontSize="11"/>
+            </Grid>
+            <TextBlock x:Name="HintText" Style="{StaticResource DialogHintStyle}" Margin="0,12,0,0"
+                       Text="Самое долгое — прорезание: каждое отверстие сверяется со стенами и плитами связей."/>
+            <Button x:Name="CancelButton" Content="Отмена" Style="{StaticResource GhostButtonStyle}"
+                    HorizontalAlignment="Right" Margin="0,12,0,0" Visibility="Collapsed"/>
+        </StackPanel>
+    </Border>
+</Window>
