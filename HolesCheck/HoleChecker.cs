@@ -90,11 +90,13 @@ namespace TNovTasks
         static readonly Guid SizeLengthGuid = new Guid("748a2515-4cc9-4b74-9a69-339a8d65a212");     // ADSK_Размер_Длина
         public static readonly Guid ApprovedBimGuid = new Guid("94587b6e-5bdd-4fe8-bea4-4996c32801c4"); // N_Согласовано BIM
 
-        public static readonly string[] Purposes = { "КЖ.Плиты", "КЖ.Стены", "КР.Стены", "КЖ.Приямки", "КР.Рамы", "КР.Шахты" };
+        // Проверяются только отверстия и приямки (Виктор, 22.10.2026): шахты и рамы
+        // под оборудование не собираются, их группы (КР.Шахты, КР.Рамы) не смотрятся.
+        public static readonly string[] Purposes = { "КЖ.Плиты", "КЖ.Стены", "КР.Стены", "КЖ.Приямки" };
         static readonly string[] KnownSenders = { "ВК", "ОВ", "ЭО", "ЭМ", "ЭЛ", "СС", "ТС", "ТХ", "АУПТ", "ПТ", "ИТП" };
         static readonly Regex FloorPart = new Regex(@"^(этаж -?\d+(\s?-\s?-?\d+)?|[А-ЯЁ][а-яё]+( \d+)?)$");
 
-        enum Kind { WallHole, FloorHole, Frame, Shaft, Pit }
+        enum Kind { WallHole, FloorHole, Pit }
 
         class Item
         {
@@ -152,7 +154,7 @@ namespace TNovTasks
         public static HoleCheckReport Run(Document doc, ICollection<Group> groups, List<HoleCheckHistoryItem> history)
         {
             var report = new HoleCheckReport();
-            Step("Сбор отверстий, рам и шахт", 0.0);
+            Step("Сбор отверстий и приямков", 0.0);
             List<Item> all = Collect(doc);
             HashSet<int> scopeGroupTypes = groups == null ? null
                 : new HashSet<int>(groups.Select(g => IdInt(g.GetTypeId())));
@@ -178,7 +180,7 @@ namespace TNovTasks
             List<LinkCtx> links = GetLinks(doc);
 
             if (links.Count == 0)
-                report.Skipped.Add("прорезание и низ рам — не загружены связи КЖ/АР");
+                report.Skipped.Add("прорезание — не загружены связи КЖ/АР");
             else
                 Each(scope, "Прорезание конструкций", 0.3, 0.85, it => CheckThrough(it, links, issues));
 
@@ -264,8 +266,6 @@ namespace TNovTasks
         {
             if (family.StartsWith("pmN.Отверстие"))
                 return family.Contains("Перекр") ? Kind.FloorHole : Kind.WallHole;
-            if (family.StartsWith("pmN.Рама под оборудование")) return Kind.Frame;
-            if (family.StartsWith("pmN.Задание на шахту")) return Kind.Shaft;
             if (family.StartsWith("pmN.Задание на приямок")) return Kind.Pit;
             return null;
         }
@@ -276,8 +276,6 @@ namespace TNovTasks
             {
                 case Kind.WallHole: return "отверстие в стене";
                 case Kind.FloorHole: return "отверстие в перекрытии";
-                case Kind.Frame: return "рама";
-                case Kind.Shaft: return "шахта";
                 default: return "приямок";
             }
         }
@@ -436,31 +434,38 @@ namespace TNovTasks
                 case "КЖ.Стены":
                 case "КР.Стены": ok = it.Kind == Kind.WallHole; break;
                 case "КЖ.Плиты": ok = it.Kind == Kind.FloorHole; break;
-                case "КЖ.Приямки": ok = it.Kind == Kind.Pit; break;
-                case "КР.Рамы": ok = it.Kind == Kind.Frame; break;
-                default: ok = it.Kind == Kind.Shaft; break;
+                default: ok = it.Kind == Kind.Pit; break;   // КЖ.Приямки
             }
             if (!ok)
                 issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Группы", KindName(it.Kind) + " (" + it.Family + ") лежит в группе «" + purpose + "»"));
         }
 
+        /// <summary>
+        /// Обязательные параметры (Виктор, 22.10.2026): ADSK_Группирование и
+        /// A_Отверстие_Функция заполнены у КАЖДОГО отверстия и приямка — в группе
+        /// он или нет, верное ли имя группы. Группирование ещё и совпадает с
+        /// назначением из имени группы.
+        /// </summary>
         static void CheckParams(Item it, List<HoleIssue> issues)
         {
             string purpose = PurposeOf(it);
-            if (it.Group != null && Purposes.Contains(purpose))
-            {
-                string v = it.Elem.get_Parameter(AdskGroupingGuid)?.AsString()?.Trim() ?? "";
-                if (v != purpose)
-                    issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "ADSK_Группирование",
-                        v.Length == 0 ? "не заполнено, по группе должно быть «" + purpose + "»" : "= «" + v + "», по группе должно быть «" + purpose + "»"));
-            }
+            bool knownPurpose = it.Group != null && Purposes.Contains(purpose);
+            Parameter gp = it.Elem.get_Parameter(AdskGroupingGuid);
+            string v = gp?.AsString()?.Trim() ?? "";
+            if (gp == null)
+                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "ADSK_Группирование", "у семейства нет параметра ADSK_Группирование"));
+            else if (v.Length == 0)
+                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "ADSK_Группирование",
+                    "не заполнено" + (knownPurpose ? ", по группе должно быть «" + purpose + "»" : "")));
+            else if (knownPurpose && v != purpose)
+                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "ADSK_Группирование", "= «" + v + "», по группе должно быть «" + purpose + "»"));
 
-            if (it.Kind == Kind.WallHole || it.Kind == Kind.FloorHole)
-            {
-                Parameter f = it.Elem.LookupParameter("A_Отверстие_Функция");
-                if (f != null && string.IsNullOrWhiteSpace(ParamText(f)))
-                    issues.Add(ElemIssue(it, HoleIssueSeverity.Warning, "Функция", "A_Отверстие_Функция не заполнена — в марке на плане не будет префикса «отв.»"));
-            }
+            Parameter f = it.Elem.LookupParameter("A_Отверстие_Функция");
+            if (f == null)
+                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Функция", "у семейства нет параметра A_Отверстие_Функция"));
+            else if (string.IsNullOrWhiteSpace(ParamText(f)))
+                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Функция", "A_Отверстие_Функция не заполнена"
+                    + (it.Kind == Kind.Pit ? "" : " — в марке на плане не будет префикса «отв.»")));
         }
 
         /// <summary>Нестандартная функция (Функция.Автоматически выключена) — только отдельной группой.</summary>
@@ -505,9 +510,7 @@ namespace TNovTasks
                 string pattern, hint;
                 switch (it.Kind)
                 {
-                    case Kind.Frame: pattern = @"^Р\d+$"; hint = "Р1, Р2…"; break;
                     case Kind.Pit: pattern = @"^П\d+$"; hint = "П1, П2…"; break;
-                    case Kind.Shaft: pattern = @"^Ш\d+$"; hint = "Ш1, Ш2…"; break;
                     default: pattern = @"^\d+$"; hint = "число: 1, 2…"; break;
                 }
                 if (!Regex.IsMatch(it.Mark, pattern))
@@ -584,7 +587,6 @@ namespace TNovTasks
         static void CheckThrough(Item it, List<LinkCtx> links, List<HoleIssue> issues)
         {
             if (it.Solids.Count == 0) return;
-            if (it.Kind == Kind.Frame) { CheckFrameBottom(it, links, issues); return; }
             if (it.Kind != Kind.WallHole && it.Kind != Kind.FloorHole) return;
 
             int depth = it.Kind == Kind.FloorHole ? 2 : WallDepthAxis(it);
@@ -688,51 +690,6 @@ namespace TNovTasks
             }
         }
 
-        /// <summary>Низ рамы под оборудование совпадает с верхом плиты покрытия КЖ.</summary>
-        static void CheckFrameBottom(Item it, List<LinkCtx> links, List<HoleIssue> issues)
-        {
-            XYZ[] axes = { it.T.BasisX, it.T.BasisY, it.T.BasisZ };
-            double bottom = it.T.Origin.Z + it.Min[2];
-            XYZ c = new XYZ(it.Center.X, it.Center.Y, bottom - 500 / FtToMm);
-            double hu = Math.Max((it.Max[0] - it.Min[0]) * 0.25, 5 / FtToMm);
-            double hv = Math.Max((it.Max[1] - it.Min[1]) * 0.25, 5 / FtToMm);
-            Solid probe;
-            try { probe = Box(c, axes[0], axes[1], XYZ.BasisZ, hu, hv, 1000 / FtToMm); } catch (Exception) { return; }
-
-            double? top = null;
-            foreach (var lc in links)
-            {
-                Solid probeL;
-                try { probeL = SolidUtils.CreateTransformed(probe, lc.Inv); } catch (Exception) { continue; }
-                var hits = new FilteredElementCollector(lc.Doc)
-                    .WherePasses(new ElementMulticategoryFilter(new[] { BuiltInCategory.OST_Floors, BuiltInCategory.OST_Roofs }))
-                    .WhereElementIsNotElementType()
-                    .WherePasses(new ElementIntersectsSolidFilter(probeL));
-                foreach (Element e in hits)
-                {
-                    var solids = new List<Solid>();
-                    CollectSolids(e.get_Geometry(new Options { ComputeReferences = false }), solids);
-                    foreach (Solid s in solids)
-                    {
-                        Solid x;
-                        try { x = BooleanOperationsUtils.ExecuteBooleanOperation(s, probeL, BooleanOperationsType.Intersect); } catch (Exception) { continue; }
-                        if (x == null || x.Volume < 1e-9) continue;
-                        foreach (Edge ed in x.Edges)
-                            foreach (XYZ p in ed.Tessellate())
-                            {
-                                double z = lc.T.OfPoint(p).Z;
-                                if (top == null || z > top) top = z;
-                            }
-                    }
-                }
-            }
-            if (top == null) return; // плиты в пределах метра нет — не судим
-            double diff = (bottom - top.Value) * FtToMm;
-            if (Math.Abs(diff) > 1.0)
-                issues.Add(ElemIssue(it, HoleIssueSeverity.Warning, "Рамы",
-                    "низ рамы " + (diff > 0 ? "выше" : "ниже") + " верха плиты на " + F(Math.Abs(diff)) + " мм — должен совпадать"));
-        }
-
         static Solid Box(XYZ center, XYZ u, XYZ v, XYZ dir, double hu, double hv, double half)
         {
             XYZ start = center - dir * half;
@@ -760,10 +717,6 @@ namespace TNovTasks
                     if (b.BbMin.Y > a.BbMax.Y + tol || a.BbMin.Y > b.BbMax.Y + tol) continue;
                     if (b.BbMin.Z > a.BbMax.Z + tol || a.BbMin.Z > b.BbMax.Z + tol) continue;
                     if (!inScope(a) && !inScope(b)) continue;
-                    // Отверстие внутри задания на шахту — норма: шахта задаёт проём целиком,
-                    // отверстия ИОС в ней штатны (КР, 19.10.2026). Дубли шахт и отверстий
-                    // между собой по-прежнему ошибка.
-                    if (IsHole(a) && b.Kind == Kind.Shaft || IsHole(b) && a.Kind == Kind.Shaft) continue;
 
                     var main = inScope(a) ? a : b; var other = main == a ? b : a;
                     string key = Math.Min(IdInt(a.Elem.Id), IdInt(b.Elem.Id)) + ":" + Math.Max(IdInt(a.Elem.Id), IdInt(b.Elem.Id));
@@ -788,7 +741,6 @@ namespace TNovTasks
             }
         }
 
-        static bool IsHole(Item i) => i.Kind == Kind.WallHole || i.Kind == Kind.FloorHole;
 
         /// <summary>Объём пересечения в футах³; grow &gt; 0 — a предварительно раздувается на grow во все стороны.</summary>
         static double IntersectionVolume(Item a, Item b, double grow)
