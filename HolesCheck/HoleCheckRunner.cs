@@ -113,10 +113,22 @@ namespace TNovTasks
             public List<HoleCheckHistoryItem> History;
             public List<string> Notes;
             public string Scope;
+            /// <summary>Имена групп проверки — чтобы найти их заново, если группу пересобрали.</summary>
+            public HashSet<string> GroupNames;
         }
 
         internal static HoleCheckReport Check(CheckContext c)
         {
+            // Окно немодальное: группу могли разгруппировать и собрать заново, пока
+            // оно открыто, — старый объект Group тогда недействителен и ронял перепроверку.
+            if (c.Groups != null)
+            {
+                if (c.GroupNames == null)
+                    c.GroupNames = new HashSet<string>(c.Groups.Where(g => g.IsValidObject).Select(g => g.Name), StringComparer.OrdinalIgnoreCase);
+                else if (c.Groups.Any(g => !g.IsValidObject))
+                    c.Groups = new FilteredElementCollector(c.Doc).OfClass(typeof(Group)).Cast<Group>()
+                        .Where(g => c.GroupNames.Contains(g.Name)).ToList();
+            }
             var progress = new HoleCheckProgressWindow(c.Scope);
             Own(progress);
             progress.Show();
@@ -207,11 +219,14 @@ namespace TNovTasks
                 .Where(n => n != null && siteTasks.ContainsKey(n)).ToList();
             if (names.Count == 0) return "\n\nTNovPRO: в журнале нет заданий для проверенных групп.";
             var lines = new List<string>();
+            // «На доработку» при нескольких заданиях — только тем, где есть ошибки; если
+            // ошибок нет нигде, BIM возвращает по своей причине — получают все.
+            bool anyErrors = report.Elements.Any(e => e.HasError);
             foreach (string n in names)
             {
                 SiteTask t = siteTasks[n];
                 bool hasErrors = report.Elements.Any(e => string.Equals(e.GroupName, n, StringComparison.OrdinalIgnoreCase) && e.HasError);
-                string v = verdict == "rework" && !hasErrors ? null : verdict;
+                string v = verdict == "rework" && anyErrors && !hasErrors ? null : verdict;
                 string err = HoleCheckSite.PostBimCheck(t.Id, HoleCheckSite.BuildCheck(t, report, n, v, v == null ? null : note));
                 string what = v == "accepted" ? "принято" : v == "rework" ? "на доработку" : "итог проверки";
                 lines.Add("№" + t.Number + " " + n + ": " + (err == null ? what : "не отправлено — " + err));
@@ -358,20 +373,29 @@ namespace TNovTasks
             /// </summary>
             void Accept(Document doc)
             {
+                // Окно немодальное: пока оно было открыто, модель могли поправить —
+                // решение принимаем по свежей проверке, а не по отчёту в окне.
+                Recheck();
                 if (_report.Errors > 0) { new InfoWindow280("Есть ошибки — задание принять нельзя. Отправьте на доработку.").ShowDialog(); return; }
                 var set1 = _report.Elements.Where(e => e.ApprovedBim.HasValue && e.ApprovedBim != 1 && !e.HasError).Select(e => e.Id).ToList();
                 string r1 = SetApproval(doc, set1, 1, _bimFromSite);
                 Recheck();
-                // между проверками модель могли поправить — с ошибками «принято» не пишем
-                string site = _report.Errors == 0
+                // «Принято» — только если в Revit согласовано ВСЁ: занятые другими,
+                // откаченные транзакцией и возвращённые обновителем элементы его запрещают.
+                int left = _report.Elements.Count(e => e.ApprovedBim.HasValue && e.ApprovedBim != 1);
+                bool ok = _report.Errors == 0 && left == 0;
+                string site = ok
                     ? PostToSite(_report, _siteTasks, "accepted")
-                    : PostToSite(_report, _siteTasks) + "\nПосле перепроверки появились ошибки — «Принято» не отправлено.";
-                new InfoWindow280("Задание принято.\nСогласовано в Revit: " + r1 + site).ShowDialog();
+                    : PostToSite(_report, _siteTasks) + (_report.Errors > 0
+                        ? "\nПосле перепроверки появились ошибки — «Принято» не отправлено."
+                        : "\nВ Revit не согласовано элементов: " + left + " — «Принято» не отправлено. Повторите, когда элементы освободятся.");
+                new InfoWindow280((ok ? "Задание принято." : "Задание НЕ принято.") + "\nСогласовано в Revit: " + r1 + site).ShowDialog();
             }
 
             /// <summary>«На доработку»: снять согласование с элементов с ошибками и отправить причину на сайт.</summary>
             void Rework(Document doc)
             {
+                Recheck();
                 var set0 = _report.Elements.Where(e => e.ApprovedBim == 1 && e.HasError).Select(e => e.Id).ToList();
                 string r0 = SetApproval(doc, set0, 0, _bimFromSite);
                 Recheck();
@@ -381,6 +405,7 @@ namespace TNovTasks
 
             void Selected(Document doc, bool approve)
             {
+                if (approve) Recheck(); // согласовывать по свежим ошибкам, а не по отчёту в окне
                 var byId = _report.Elements.ToDictionary(e => HoleChecker.IdInt(e.Id));
                 var chosen = _ids.Select(id => byId.TryGetValue(HoleChecker.IdInt(id), out var e) ? e : null)
                     .Where(e => e != null && e.ApprovedBim.HasValue).ToList();
@@ -517,7 +542,8 @@ namespace TNovTasks
             try
             {
                 visible = v != null && (v is View3D || v is ViewPlan || v is ViewSection)
-                    && new FilteredElementCollector(doc, v.Id).WherePasses(new ElementIdSetFilter(ids)).Any();
+                    // видны ВСЕ: иначе ShowElements ищет недостающие по закрытым видам (зависание 19.10)
+                    && new FilteredElementCollector(doc, v.Id).WherePasses(new ElementIdSetFilter(ids)).GetElementCount() == ids.Count;
             }
             catch (Exception) { }
             if (!visible)

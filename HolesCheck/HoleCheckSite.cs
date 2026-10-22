@@ -232,8 +232,15 @@ namespace TNovTasks
                 catch (Exception ex) { s.Notes.Add("роль на сайте не получена: " + ex.Message); }
                 try
                 {
-                    var arr = JObject.Parse(await GetAsync("api/tasks?model=" + Uri.EscapeDataString(modelName ?? "")))["tasks"] as JArray;
-                    s.Tasks = arr == null ? new List<SiteTask>() : arr.ToObject<List<SiteTask>>();
+                    // все страницы: сервер с 10.2026 отдаёт по 500, старые задания иначе теряются
+                    s.Tasks = new List<SiteTask>();
+                    for (int offset = 0; offset < 10000; offset += 500)
+                    {
+                        var jo = JObject.Parse(await GetAsync("api/tasks?model=" + Uri.EscapeDataString(modelName ?? "")
+                            + "&limit=500&offset=" + offset));
+                        if (jo["tasks"] is JArray arr) s.Tasks.AddRange(arr.ToObject<List<SiteTask>>());
+                        if (jo["hasMore"]?.Type != JTokenType.Boolean || !(bool)jo["hasMore"]) break;
+                    }
                 }
                 catch (Exception ex) { s.Notes.Add("задания с сайта не получены: " + ex.Message); }
                 // История по элементам: сервер без неё (до 19.10.2026) отвечает 404 — молча берём JSON
@@ -349,7 +356,9 @@ namespace TNovTasks
         {
             try
             {
-                return Sync(async () =>
+                // под окном ожидания: без сети или с истёкшим входом Sync держал Revit
+                // «не отвечает» до минуты на задание (и до 3 минут на вход в браузере)
+                return Wait(async () =>
                 {
                     using (var resp = await SendAsync(() => Make(HttpMethod.Post, "api/tasks/" + taskId + "/bim-check", body)))
                     {
@@ -359,7 +368,7 @@ namespace TNovTasks
                         try { err = (string)JObject.Parse(text)["error"]; } catch { }
                         return err ?? "HTTP " + (int)resp.StatusCode;
                     }
-                });
+                }, "Отправка проверки BIM в TNovPRO…", null);
             }
             catch (Exception ex) { return ex.Message; }
         }

@@ -259,10 +259,17 @@ namespace TNovTasks
 
         DataGrid ActiveGrid => ElementsTab ? ElementsGrid : IssuesGrid;
 
-        List<ElementId> SelectionIds()
+        /// <summary>
+        /// Элементы выбранных строк. Во вкладке «Замечания» показать можно обоих
+        /// участников (дубль, пересечение, повтор марки), а согласовать/снять —
+        /// только главного: второй часто из чужого задания.
+        /// </summary>
+        List<ElementId> SelectionIds(bool forShow)
         {
             if (ElementsTab) return ElementsGrid.SelectedItems.OfType<HoleElementRow>().Select(r => r.Element.Id).ToList();
-            return IssuesGrid.SelectedItems.OfType<HoleIssueRow>().SelectMany(r => r.Issue.Ids).Distinct().ToList();
+            var rows = IssuesGrid.SelectedItems.OfType<HoleIssueRow>();
+            return (forShow ? rows.SelectMany(r => r.Issue.Ids) : rows.Where(r => r.Issue.Ids.Count > 0).Select(r => r.Issue.Ids[0]))
+                .Distinct().ToList();
         }
 
         void UpdateSelection()
@@ -280,7 +287,7 @@ namespace TNovTasks
         /// <summary>Модальное окно — закрыться с ответом; немодальное — попросить Revit и остаться.</summary>
         void Finish(HoleCheckAction action, string text = null)
         {
-            var ids = SelectionIds();
+            var ids = SelectionIds(action == HoleCheckAction.Show);
             if (_modeless)
             {
                 Requested?.Invoke(action, ids, text);

@@ -65,7 +65,7 @@ namespace TNovTasks
     /// <summary>
     /// Проверка модели «Задания» по статье вики «Задания на отверстия»
     /// (раздел BIM / MEP) и чек-листу КР («ЧЕК-лист.Отверстия», Dynamo):
-    /// сквозное прорезание с запасом 20 мм, дубли и
+    /// сквозное прорезание (прямоугольные — с выступом, круглые — по граням), дубли и
     /// пересечения, сквозные марки по секции, имена групп
     /// «От кого_Кому.Назначение_Этаж», ADSK_Группирование, размноженные
     /// группы типовых этажей, сдвиг больше метра без новой марки.
@@ -76,8 +76,10 @@ namespace TNovTasks
         // Кратности 5 мм (размеры, привязки к осям и уровню) в проверке НЕТ —
         // отзыв Виктора 21.10.2026: правило давало ложные ошибки, размеры и
         // привязки отверстие получает от инженерной сети.
-        const double ThroughMargin = 20.0;  // мм, запас прорезания с каждой стороны
+        // Прорезание (статья, п.1): прямоугольное выступает за грань хотя бы на MarginTol,
+        // круглое стоит по грани с допуском RoundTol.
         const double MarginTol = 0.5;       // мм
+        const double RoundTol = 1.0;        // мм
         const double ProbeHalfLength = 2000.0; // мм, щуп толщины конструкции в каждую сторону
         const double MoveLimit = 1000.0;    // мм, дальше — удалить и поставить новое
 
@@ -92,9 +94,11 @@ namespace TNovTasks
 
         // Проверяются только отверстия и приямки (Виктор, 22.10.2026): шахты и рамы
         // под оборудование не собираются, их группы (КР.Шахты, КР.Рамы) не смотрятся.
-        public static readonly string[] Purposes = { "КЖ.Плиты", "КЖ.Стены", "КР.Стены", "КЖ.Приямки" };
+        // АР.Витражи — допустимое «Кому» по статье (отверстия в витражах — стеновые).
+        public static readonly string[] Purposes = { "КЖ.Плиты", "КЖ.Стены", "КР.Стены", "КЖ.Приямки", "АР.Витражи" };
         static readonly string[] KnownSenders = { "ВК", "ОВ", "ЭО", "ЭМ", "ЭЛ", "СС", "ТС", "ТХ", "АУПТ", "ПТ", "ИТП" };
-        static readonly Regex FloorPart = new Regex(@"^(этаж -?\d+(\s?-\s?-?\d+)?|[А-ЯЁ][а-яё]+( \d+)?)$");
+        // Эталон 76-СУЗДАЛ.23: «этаж-1», «Этаж -1», «Этаж 1-17» — регистр и пробел не важны.
+        static readonly Regex FloorPart = new Regex(@"^(этаж\s?-?\d+(\s?-\s?-?\d+)?|[А-ЯЁ][а-яё]+( \d+)?)$", RegexOptions.IgnoreCase);
 
         enum Kind { WallHole, FloorHole, Pit }
 
@@ -182,7 +186,18 @@ namespace TNovTasks
             if (links.Count == 0)
                 report.Skipped.Add("прорезание — не загружены связи КЖ/АР");
             else
-                Each(scope, "Прорезание конструкций", 0.3, 0.85, it => CheckThrough(it, links, issues));
+            {
+                // Уже вставленные в КЖ/АР (копия с той же маркой на том же месте) там и
+                // вырезаны: щуп ушёл бы в пустоту и дал ложное «не достаёт». Конструктор
+                // такое отверстие уже принял — прорезание и «до плиты» не проверяем.
+                // Эталон 76-СУЗДАЛ.23: копия есть у 905 из 1018, расхождение медиана 0 мм.
+                HashSet<int> cut = InsertedInLinks(scope, links);
+                if (cut.Count > 0)
+                    report.Skipped.Add("прорезание и «до плиты» — " + cut.Count + " отв. уже вставлены в связи КЖ/АР");
+                var fresh = scope.Where(it => !cut.Contains(IdInt(it.Elem.Id))).ToList();
+                Each(fresh, "Прорезание конструкций", 0.3, 0.8, it => CheckThrough(it, links, issues));
+                Each(fresh.Where(it => it.Kind == Kind.WallHole).ToList(), "Расстояние до плит", 0.8, 0.85, it => CheckSlabGap(it, links, issues));
+            }
 
             Step("Дубли и пересечения", 0.85);
             CheckOverlaps(all.Where(i => i.Primary).ToList(), inScope, issues);
@@ -379,6 +394,8 @@ namespace TNovTasks
                     string sender = parts[0].Trim(), purpose = parts[1].Trim(), floor = parts[2].Trim();
                     if (sender.Length == 0)
                         issues.Add(GroupIssue(HoleIssueSeverity.Error, name, main, "пустая часть «От кого»"));
+                    else if (Regex.IsMatch(sender, "[A-Za-z]") && KnownSenders.Contains(ToCyrillic(sender)))
+                        issues.Add(GroupIssue(HoleIssueSeverity.Error, name, main, "«От кого» = «" + sender + "» набрано латиницей — нужно «" + ToCyrillic(sender) + "» (16-ЮЖН.1: «CC_КЖ.Плиты»)"));
                     else if (!KnownSenders.Contains(sender))
                         issues.Add(GroupIssue(HoleIssueSeverity.Warning, name, main, "«От кого» = «" + sender + "» — нестандартный раздел (ожидается ВК, ОВ, ЭО, СС…)"));
                     if (!Purposes.Contains(purpose))
@@ -400,6 +417,15 @@ namespace TNovTasks
                     }
                 }
             }
+        }
+
+        /// <summary>Латинские двойники кириллицы (C→С, B→В, …) — как их путают в именах разделов.</summary>
+        static string ToCyrillic(string s)
+        {
+            const string lat = "ABCEHKMOPTXaceopxy", cyr = "АВСЕНКМОРТХасеорху";
+            var sb = new System.Text.StringBuilder(s.Length);
+            foreach (char ch in s) { int i = lat.IndexOf(ch); sb.Append(i >= 0 ? cyr[i] : ch); }
+            return sb.ToString();
         }
 
         static HoleIssue GroupIssue(HoleIssueSeverity sev, string name, Group g, string text) =>
@@ -432,7 +458,8 @@ namespace TNovTasks
             switch (purpose)
             {
                 case "КЖ.Стены":
-                case "КР.Стены": ok = it.Kind == Kind.WallHole; break;
+                case "КР.Стены":
+                case "АР.Витражи": ok = it.Kind == Kind.WallHole; break;
                 case "КЖ.Плиты": ok = it.Kind == Kind.FloorHole; break;
                 default: ok = it.Kind == Kind.Pit; break;   // КЖ.Приямки
             }
@@ -442,7 +469,7 @@ namespace TNovTasks
 
         /// <summary>
         /// Обязательные параметры (Виктор, 22.10.2026): ADSK_Группирование и
-        /// A_Отверстие_Функция заполнены у КАЖДОГО отверстия и приямка — в группе
+        /// ADSK_Отверстие_Функция заполнены у КАЖДОГО отверстия и приямка — в группе
         /// он или нет, верное ли имя группы. Группирование ещё и совпадает с
         /// назначением из имени группы.
         /// </summary>
@@ -460,11 +487,13 @@ namespace TNovTasks
             else if (knownPurpose && v != purpose)
                 issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "ADSK_Группирование", "= «" + v + "», по группе должно быть «" + purpose + "»"));
 
-            Parameter f = it.Elem.LookupParameter("A_Отверстие_Функция");
+            // В семействах pmN (эталон 76-СУЗДАЛ.23, 22.10.2026) — общий ADSK_Отверстие_Функция;
+            // A_Отверстие_Функция — запасное имя.
+            Parameter f = it.Elem.LookupParameter("ADSK_Отверстие_Функция") ?? it.Elem.LookupParameter("A_Отверстие_Функция");
             if (f == null)
-                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Функция", "у семейства нет параметра A_Отверстие_Функция"));
+                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Функция", "у семейства нет параметра ADSK_Отверстие_Функция"));
             else if (string.IsNullOrWhiteSpace(ParamText(f)))
-                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Функция", "A_Отверстие_Функция не заполнена"
+                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Функция", f.Definition.Name + " не заполнена"
                     + (it.Kind == Kind.Pit ? "" : " — в марке на плане не будет префикса «отв.»")));
         }
 
@@ -562,22 +591,143 @@ namespace TNovTasks
             return result;
         }
 
+        /// <summary>Связь железобетона: «КЖ»/«КЖФ» отдельным словом в имени модели (…_КЖ_С1, …_КЖ_С1_КЖ0, КЖ.1.В, КЖФ_С1).</summary>
+        static bool IsKjLink(LinkCtx lc) => Regex.IsMatch(lc.Doc.Title ?? "", @"(^|[_\s.\-])КЖФ?([_\s.\-\d]|$)");
+
+        /// <summary>Чужая модель заданий (другая секция) — её отверстия не «вставка» в КЖ/АР.</summary>
+        static bool IsTasksLink(LinkCtx lc) => (lc.Doc.Title ?? "").IndexOf("Задани", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        /// <summary>Id отверстий, у которых в связях есть копия pmN с той же маркой ближе 25 мм.</summary>
+        static HashSet<int> InsertedInLinks(List<Item> scope, List<LinkCtx> links)
+        {
+            const double near = 25 / FtToMm;
+            var byMark = new Dictionary<string, List<XYZ>>();
+            foreach (var lc in links.Where(l => !IsTasksLink(l)))
+                foreach (FamilyInstance fi in new FilteredElementCollector(lc.Doc).OfClass(typeof(FamilyInstance)).Cast<FamilyInstance>())
+                {
+                    string fam = fi.Symbol?.FamilyName ?? "";
+                    if (!fam.StartsWith("pmN.Отверстие") && !fam.StartsWith("pmN_Отверстие") && !fam.StartsWith("pmN.Задание на приямок")) continue;
+                    string mark = (fi.get_Parameter(BuiltInParameter.ALL_MODEL_MARK)?.AsString() ?? "").Trim();
+                    if (mark.Length == 0 || !(fi.Location is LocationPoint lp)) continue;
+                    if (!byMark.TryGetValue(mark, out var list)) byMark[mark] = list = new List<XYZ>();
+                    list.Add(lc.T.OfPoint(lp.Point));
+                }
+            var cut = new HashSet<int>();
+            foreach (var it in scope)
+            {
+                if (it.Mark.Length == 0 || !byMark.TryGetValue(it.Mark, out var pts)) continue;
+                XYZ p = (it.Elem.Location as LocationPoint)?.Point ?? it.T.Origin;
+                if (pts.Any(q => q.DistanceTo(p) < near)) cut.Add(IdInt(it.Elem.Id));
+            }
+            return cut;
+        }
 
         /// <summary>
-        /// Какая из горизонтальных осей отверстия в стене — глубина: та, чей
-        /// размер НЕ совпадает с ADSK_Отверстие_Ширина (или диаметром).
+        /// Статья, п.8 «Доводим до плиты»: ближе 100 мм к грани плиты отверстие продлевают
+        /// до неё либо отступают не меньше 50 мм. Нарушение — зазор 1–50 мм сверху или снизу.
+        /// На эталоне 76-СУЗДАЛ.23 — 7 из 547 стеновых.
+        /// </summary>
+        static void CheckSlabGap(Item it, List<LinkCtx> links, List<HoleIssue> issues)
+        {
+            if (it.Solids.Count == 0) return;
+            double top = it.BbMax.Z, bot = it.BbMin.Z, r = 20 / FtToMm, h = 500 / FtToMm;
+            XYZ c = it.Center;
+            double up = double.MaxValue, down = double.MaxValue;
+            var cats = new ElementMulticategoryFilter(new[] { BuiltInCategory.OST_Floors, BuiltInCategory.OST_StructuralFoundation });
+            foreach (var lc in links)
+            {
+                Solid colU, colD;
+                try
+                {
+                    colU = SolidUtils.CreateTransformed(Box(new XYZ(c.X, c.Y, top + h), XYZ.BasisX, XYZ.BasisY, XYZ.BasisZ, r, r, h), lc.Inv);
+                    colD = SolidUtils.CreateTransformed(Box(new XYZ(c.X, c.Y, bot - h), XYZ.BasisX, XYZ.BasisY, XYZ.BasisZ, r, r, h), lc.Inv);
+                }
+                catch (Exception) { continue; }
+                up = Math.Min(up, FaceGap(lc, colU, cats, new XYZ(c.X, c.Y, top), true));
+                down = Math.Min(down, FaceGap(lc, colD, cats, new XYZ(c.X, c.Y, bot), false));
+            }
+            foreach (var g in new[] { new { d = up, w = "до низа плиты над ним" }, new { d = down, w = "до верха плиты под ним" } })
+                if (g.d > 1 && g.d < 50)
+                    issues.Add(ElemIssue(it, HoleIssueSeverity.Warning, "До плиты",
+                        F(g.d) + " мм " + g.w + ": доведите отверстие до плиты или отступите не меньше 50 мм"));
+        }
+
+        /// <summary>Расстояние, мм, от точки (верх/низ отверстия) до ближайшей нижней (above) или верхней грани плиты.</summary>
+        static double FaceGap(LinkCtx lc, Solid probe, ElementFilter cats, XYZ from, bool above)
+        {
+            double best = double.MaxValue;
+            XYZ fl = lc.Inv.OfPoint(from);
+            foreach (Element e in new FilteredElementCollector(lc.Doc).WherePasses(cats).WhereElementIsNotElementType()
+                .WherePasses(new ElementIntersectsSolidFilter(probe)))
+            {
+                if (!(e is HostObject ho)) continue;
+                IList<Reference> refs;
+                try { refs = above ? HostObjectUtils.GetBottomFaces(ho) : HostObjectUtils.GetTopFaces(ho); } catch (Exception) { continue; }
+                foreach (Reference rf in refs)
+                {
+                    if (!(ho.GetGeometryObjectFromReference(rf) is Face f)) continue;
+                    IntersectionResult ir = f.Project(fl);
+                    if (ir == null) continue;
+                    double z = lc.T.OfPoint(ir.XYZPoint).Z, d = (above ? z - from.Z : from.Z - z) * FtToMm;
+                    if (d >= -5) best = Math.Min(best, Math.Max(0, d));
+                }
+            }
+            return best;
+        }
+
+
+        /// <summary>
+        /// Какая из горизонтальных осей отверстия в стене — глубина (сторона «Г»
+        /// семейства; статья: «учитывать буквы Ш и Г — ширина и глубина не должны
+        /// быть перепутаны»). Сначала по ADSK_Отверстие_Глубина, затем — та ось,
+        /// чей размер НЕ совпадает с шириной (диаметром). -1 — не различить
+        /// (квадрат в плане или параметры не совпадают с телом): тогда глубину
+        /// берут поперёк стены, а «перепутаны» не проверяют.
         /// </summary>
         static int WallDepthAxis(Item it)
         {
-            double? w = Mm(it.Elem, DiameterGuid) ?? Mm(it.Elem, HoleWidthGuid);
             double ex = (it.Max[0] - it.Min[0]) * FtToMm, ey = (it.Max[1] - it.Min[1]) * FtToMm;
-            if (w.HasValue)
+            int Pick(double? size, bool isDepth)
             {
-                bool xIsW = Math.Abs(ex - w.Value) < 1.0, yIsW = Math.Abs(ey - w.Value) < 1.0;
-                if (xIsW && !yIsW) return 1;
-                if (yIsW && !xIsW) return 0;
+                if (!size.HasValue || size.Value <= 0) return -1;
+                bool xm = Math.Abs(ex - size.Value) < 1.0, ym = Math.Abs(ey - size.Value) < 1.0;
+                if (xm == ym) return -1;
+                return isDepth ? (xm ? 0 : 1) : (xm ? 1 : 0);
             }
-            return 1; // по умолчанию глубина — вдоль FacingOrientation
+            int a = Pick(MmByName(it.Elem, "ADSK_Отверстие_Глубина"), true);
+            if (a >= 0) return a;
+            return Pick(Mm(it.Elem, DiameterGuid) ?? Mm(it.Elem, HoleWidthGuid), false);
+        }
+
+        static double? MmByName(Element e, string name)
+        {
+            Parameter p = e.LookupParameter(name);
+            if (p == null && e is FamilyInstance fi && fi.Symbol != null) p = fi.Symbol.LookupParameter(name);
+            if (p == null || p.StorageType != StorageType.Double || !p.HasValue) return null;
+            return p.AsDouble() * FtToMm;
+        }
+
+        static bool IsRound(Item it) => Mm(it.Elem, DiameterGuid).HasValue;
+
+        /// <summary>Ось отверстия (0 или 1), ближе всего идущая поперёк стены, в которой стоит его центр.</summary>
+        static int AcrossHostWall(Item it, List<LinkCtx> links)
+        {
+            double r = 5 / FtToMm;
+            Solid dot;
+            try { dot = Box(it.Center, XYZ.BasisX, XYZ.BasisY, XYZ.BasisZ, r, r, r); } catch (Exception) { return 1; }
+            foreach (var lc in links)
+            {
+                Solid dotL;
+                try { dotL = SolidUtils.CreateTransformed(dot, lc.Inv); } catch (Exception) { continue; }
+                foreach (Element e in new FilteredElementCollector(lc.Doc).OfCategory(BuiltInCategory.OST_Walls)
+                    .WhereElementIsNotElementType().WherePasses(new ElementIntersectsSolidFilter(dotL)))
+                {
+                    if (!(e is Wall w) || !(w.Location is LocationCurve wl) || !(wl.Curve is Line ln)) continue;
+                    XYZ along = lc.T.OfVector(ln.Direction);
+                    return Math.Abs(it.T.BasisX.DotProduct(along)) < Math.Abs(it.T.BasisY.DotProduct(along)) ? 0 : 1;
+                }
+            }
+            return 1;
         }
 
         #endregion
@@ -589,7 +739,20 @@ namespace TNovTasks
             if (it.Solids.Count == 0) return;
             if (it.Kind != Kind.WallHole && it.Kind != Kind.FloorHole) return;
 
+            // Задание «Кому: КЖ.…» прорезает только железобетон: отделку и полы АР
+            // не считаем (Виктор, 22.10.2026; на эталоне 76-СУЗДАЛ.23 отверстия КЖ.Стены
+            // = бетон + 20/20 без отделки). КР.Стены (кладка в АР) — все слои.
+            bool kjOnly = PurposeOf(it).StartsWith("КЖ.");
+            if (kjOnly)
+            {
+                var kj = links.Where(IsKjLink).ToList();
+                if (kj.Count > 0) links = kj;
+                else kjOnly = false; // связей КЖ нет — меряем по всем, как раньше
+            }
+
             int depth = it.Kind == Kind.FloorHole ? 2 : WallDepthAxis(it);
+            bool depthKnown = depth >= 0;
+            if (!depthKnown) depth = AcrossHostWall(it, links);
             XYZ[] axes = { it.T.BasisX, it.T.BasisY, it.T.BasisZ };
             XYZ dir = axes[depth];
             int u = depth == 0 ? 1 : 0, v = depth == 2 ? 1 : 2;
@@ -608,6 +771,7 @@ namespace TNovTasks
                 : new[] { BuiltInCategory.OST_Walls };
 
             var intervals = new List<double[]>(); // вдоль dir от центра, футы
+            bool inAlongWall = false;
             foreach (var lc in links)
             {
                 Solid probeL;
@@ -619,15 +783,25 @@ namespace TNovTasks
                     .WherePasses(new ElementIntersectsSolidFilter(probeL));
                 foreach (Element e in hits)
                 {
-                    // стена идёт вдоль глубины — отверстие развёрнуто к ней на 90°
+                    // Стена вдоль щупа — не толщина, которую режет отверстие: чаще всего
+                    // это перегородка, примыкающая к стене с отверстием (22.10: №69 получил
+                    // «стену 1000 мм», №70/72 — ложное «развёрнуто на 90°»). Запоминаем
+                    // только, сидит ли центр в ней самой — в пределах отрезка, а не на
+                    // бесконечном продолжении оси.
                     if (e is Wall w && w.Location is LocationCurve wl && wl.Curve is Line ln
-                        && Math.Abs(ln.Direction.DotProduct(dl)) > 0.9
-                        && Line.CreateUnbound(new XYZ(ln.Origin.X, ln.Origin.Y, c.Z), ln.Direction).Distance(c) < w.Width / 2)
+                        && Math.Abs(ln.Direction.DotProduct(dl)) > 0.9)
                     {
-                        issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Прорезание",
-                            "отверстие развёрнуто на 90° к стене: глубина " + F((it.Max[depth] - it.Min[depth]) * FtToMm)
-                            + " мм идёт вдоль стены, а ширина поперёк — поверните отверстие и поменяйте ширину с глубиной"));
-                        return;
+                        XYZ a = ln.GetEndPoint(0), b = ln.GetEndPoint(1);
+                        XYZ a2 = new XYZ(a.X, a.Y, c.Z), b2 = new XYZ(b.X, b.Y, c.Z);
+                        XYZ d2 = b2 - a2;
+                        double len = d2.GetLength();
+                        if (len > 1e-6)
+                        {
+                            double s = (c - a2).DotProduct(d2 / len);
+                            if (s > 0 && s < len && Line.CreateUnbound(a2, d2 / len).Distance(c) < w.Width / 2)
+                                inAlongWall = true;
+                        }
+                        continue;
                     }
                     var solids = new List<Solid>();
                     CollectSolids(e.get_Geometry(new Options { ComputeReferences = false, DetailLevel = ViewDetailLevel.Fine }), solids);
@@ -649,19 +823,34 @@ namespace TNovTasks
                 }
             }
 
+            // Развёрнуто на 90°: центр в стене, идущей вдоль глубины, и при этом
+            // не в поперечной (в узле примыкания поперечная стена есть — это норма).
+            if (depthKnown && inAlongWall && !intervals.Any(iv => iv[0] <= 0 && iv[1] >= 0))
+            {
+                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Прорезание",
+                    "отверстие развёрнуто на 90° к стене: глубина " + F((it.Max[depth] - it.Min[depth]) * FtToMm)
+                    + " мм идёт вдоль стены, а ширина поперёк — поверните отверстие и поменяйте ширину с глубиной"));
+                return;
+            }
+
             double hMin = it.Min[depth] - ((it.Min[depth] + it.Max[depth]) / 2);
             double hMax = -hMin;
+            // Круглое семейство: тело всегда 200 мм, глубину держит ADSK_Отверстие_Глубина
+            // (эталон 76-СУЗДАЛ.23: Г 150 и 489 при теле 200) — сверяем её, от середины тела.
+            bool round = IsRound(it);
+            double? g = round ? MmByName(it.Elem, "ADSK_Отверстие_Глубина") : null;
+            if (g.HasValue && g.Value > 0) { hMax = g.Value / 2 / FtToMm; hMin = -hMax; }
             string what = it.Kind == Kind.FloorHole ? "перекрытие" : "стену";
 
             if (intervals.Count == 0)
             {
-                issues.Add(ElemIssue(it, HoleIssueSeverity.Warning, "Прорезание", "не пересекает ни одной " + (it.Kind == Kind.FloorHole ? "плиты" : "стены") + " в загруженных связях"));
+                issues.Add(ElemIssue(it, HoleIssueSeverity.Warning, "Прорезание", "не пересекает ни одной " + (it.Kind == Kind.FloorHole ? "плиты" : "стены") + (kjOnly ? " в связях КЖ" : " в загруженных связях")));
                 return;
             }
 
             // Слои (конструкция + отделка отдельными элементами) склеиваем, если
             // между ними не больше 10 мм, и берём слой, через который идёт отверстие.
-            // Отделку АР отверстие прорезает тоже, с тем же запасом (решение 19.10.2026).
+            // Отделку АР отверстие прорезает тоже — «прорезаем все слои».
             double gap = 10 / FtToMm;
             var merged = new List<double[]>();
             foreach (var iv in intervals.OrderBy(i => i[0]))
@@ -679,15 +868,27 @@ namespace TNovTasks
             }
 
             double thick = (body[1] - body[0]) * FtToMm;
-            double m1 = (body[0] - hMin) * FtToMm; // запас с одной стороны
+            double m1 = (body[0] - hMin) * FtToMm; // выступ за грань с одной стороны (< 0 — не дорезает)
             double m2 = (hMax - body[1]) * FtToMm; // с другой
-            if (m1 < ThroughMargin - MarginTol || m2 < ThroughMargin - MarginTol)
+            string Side(double m) => m < -RoundTol ? "не дорезает " + F(-m) + " мм" : m > RoundTol ? "выступ " + F(m) + " мм" : "по грани";
+            string head = "глубина " + F((hMax - hMin) * FtToMm) + " мм на " + what + " " + F(thick) + " мм (" + (kjOnly ? "КЖ" : "все слои") + "): " + Side(m1) + " / " + Side(m2);
+            // Статья «Общие требования к заданиям», п.1 «Прорезать полностью»:
+            // прямоугольные — выступ за грань конструкции, круглые — точно по граням,
+            // прорезаем все слои. (20 мм из п.7 — допуск сдвига у конструктора, не выступ.)
+            if (round)
             {
-                string Side(double m) => m < 0 ? "не дорезает " + F(-m) + " мм" : "запас " + F(m) + " мм";
-                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Прорезание",
-                    "глубина " + F((hMax - hMin) * FtToMm) + " мм на " + what + " " + F(thick) + " мм (с отделкой): "
-                    + Side(m1) + " / " + Side(m2) + ", нужно не меньше 20 мм с каждой стороны"));
+                // не дорезает — ошибка; выступ — только предупреждение: в эталоне согласованное
+                // №1082 (76-СУЗДАЛ.23) выступает за грани наружной стены
+                if (m1 < -RoundTol || m2 < -RoundTol)
+                    issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Прорезание",
+                        head + ", круглое отверстие — точно по граням конструкции (ADSK_Отверстие_Глубина)"));
+                else if (m1 > RoundTol || m2 > RoundTol)
+                    issues.Add(ElemIssue(it, HoleIssueSeverity.Warning, "Прорезание",
+                        head + ", круглое отверстие по статье — точно по граням (ADSK_Отверстие_Глубина)"));
             }
+            else if (m1 < MarginTol || m2 < MarginTol)
+                issues.Add(ElemIssue(it, HoleIssueSeverity.Error, "Прорезание",
+                    head + ", прямоугольное отверстие должно выступать за грань с каждой стороны"));
         }
 
         static Solid Box(XYZ center, XYZ u, XYZ v, XYZ dir, double hu, double hv, double half)
@@ -702,9 +903,15 @@ namespace TNovTasks
 
         #region Дубли и пересечения
 
+        /// <summary>
+        /// Статья п.2: наложение недопустимо — внутри группы и между разделами (ошибка).
+        /// Касание гранью — «единый контур» п.9, норма (эталон 76-СУЗДАЛ.23: 29 таких пар,
+        /// все согласованы). Ближе нормы п.9 (100 мм; от 0,5 м ширины — 150, в нишах 120) —
+        /// предупреждение: на эталоне так стоят 56 из 81 пары крупных отверстий в плитах.
+        /// </summary>
         static void CheckOverlaps(List<Item> primaries, Func<Item, bool> inScope, List<HoleIssue> issues)
         {
-            double tol = 1 / FtToMm;
+            double tol = 1 / FtToMm, reach = 150 / FtToMm;
             var list = primaries.Where(i => i.Solids.Count > 0).OrderBy(i => i.BbMin.X).ToList();
             var reported = new HashSet<string>();
             for (int i = 0; i < list.Count; i++)
@@ -713,10 +920,12 @@ namespace TNovTasks
                 for (int j = i + 1; j < list.Count; j++)
                 {
                     var b = list[j];
-                    if (b.BbMin.X > a.BbMax.X + tol) break;
-                    if (b.BbMin.Y > a.BbMax.Y + tol || a.BbMin.Y > b.BbMax.Y + tol) continue;
-                    if (b.BbMin.Z > a.BbMax.Z + tol || a.BbMin.Z > b.BbMax.Z + tol) continue;
+                    if (b.BbMin.X > a.BbMax.X + reach) break;
+                    if (b.BbMin.Y > a.BbMax.Y + reach || a.BbMin.Y > b.BbMax.Y + reach) continue;
+                    if (b.BbMin.Z > a.BbMax.Z + reach || a.BbMin.Z > b.BbMax.Z + reach) continue;
                     if (!inScope(a) && !inScope(b)) continue;
+                    bool near = b.BbMin.X > a.BbMax.X + tol || b.BbMin.Y > a.BbMax.Y + tol || a.BbMin.Y > b.BbMax.Y + tol
+                        || b.BbMin.Z > a.BbMax.Z + tol || a.BbMin.Z > b.BbMax.Z + tol;
 
                     var main = inScope(a) ? a : b; var other = main == a ? b : a;
                     string key = Math.Min(IdInt(a.Elem.Id), IdInt(b.Elem.Id)) + ":" + Math.Max(IdInt(a.Elem.Id), IdInt(b.Elem.Id));
@@ -732,13 +941,30 @@ namespace TNovTasks
                         continue;
                     }
 
-                    double vol = IntersectionVolume(a, b, 0);
-                    if (vol > 1e-6)
+                    if (!near && IntersectionVolume(a, b, 0) > 1e-6)
+                    {
                         issues.Add(ElemIssue(main, HoleIssueSeverity.Error, "Пересечения", "пересекается с " + who, other.Elem.Id));
-                    else if (IntersectionVolume(a, b, tol) > 1e-9)
-                        issues.Add(ElemIssue(main, HoleIssueSeverity.Error, "Пересечения", "касается " + who + " — смежные отверстия объединяют или разносят", other.Elem.Id));
+                        continue;
+                    }
+                    // касание (зазор 0) — единый контур, норма
+                    if (a.Kind != b.Kind || IntersectionVolume(a, b, tol) > 1e-9) continue;
+                    double need = Math.Max(SectionWidth(a), SectionWidth(b)) >= 500 ? 150 : 100;
+                    if (IntersectionVolume(a, b, need / FtToMm) > 1e-9)
+                        issues.Add(ElemIssue(main, HoleIssueSeverity.Warning, "Расстояния",
+                            "ближе " + F(need) + " мм к " + who + (need > 100 ? " (ширина от 0,5 м; в нишах допустимо 120)" : "")
+                            + " — разнесите или совместите в единый контур", other.Elem.Id));
                 }
             }
+        }
+
+        /// <summary>Наибольший размер сечения отверстия (без глубины), мм.</summary>
+        static double SectionWidth(Item it)
+        {
+            double ex = (it.Max[0] - it.Min[0]) * FtToMm, ey = (it.Max[1] - it.Min[1]) * FtToMm, ez = (it.Max[2] - it.Min[2]) * FtToMm;
+            if (it.Kind == Kind.FloorHole) return Math.Max(ex, ey);
+            int d = WallDepthAxis(it);
+            double w = d == 0 ? ey : d == 1 ? ex : Math.Max(ex, ey); // ось глубины не различить — берём большее
+            return Math.Max(w, ez);
         }
 
 
